@@ -13,14 +13,43 @@ const LABEL_STYLES: Record<SentimentSummary["label"], string> = {
 
 export function SentimentBadge({ label, sentiment }: { label: string; sentiment: SentimentSummary | null }) {
   const value = sentiment?.label ?? "Unknown";
+  const tagged = sentiment?.taggedTotal ?? 0;
   return (
     <div className="flex items-center justify-between text-sm">
-      <span className="text-slate-500">{label}</span>
+      <span className="flex items-center gap-1 text-slate-500">
+        {label}
+        <InfoIcon
+          title={
+            tagged > 0
+              ? `Based on ${tagged} sentiment-tagged post${tagged === 1 ? "" : "s"} out of ${sentiment?.sampledMessages ?? 0} recent on StockTwits — a small, self-reported, unweighted sample from one platform, not a real sentiment model.`
+              : "Needs at least 3 sentiment-tagged posts on StockTwits before showing a read -- a small, self-reported, unweighted sample from one platform, not a real sentiment model."
+          }
+        />
+      </span>
       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${LABEL_STYLES[value]}`}>
         {value}
         {sentiment?.bullishPercent != null && ` (${Math.round(sentiment.bullishPercent)}% bullish)`}
       </span>
     </div>
+  );
+}
+
+function InfoIcon({ title }: { title: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      className="h-3.5 w-3.5 shrink-0 cursor-help text-slate-400"
+      role="img"
+      aria-label={title}
+    >
+      <title>{title}</title>
+      <circle cx="12" cy="12" r="9" />
+      <path strokeLinecap="round" d="M12 11v5.5" />
+      <circle cx="12" cy="8" r="0.75" fill="currentColor" stroke="none" />
+    </svg>
   );
 }
 
