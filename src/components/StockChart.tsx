@@ -49,8 +49,10 @@ const PALETTES = {
     border: "#1e293b",
     up: "#10b981",
     down: "#ef4444",
-    volUp: "#10b98166",
-    volDown: "#ef444466",
+    // Was 40% opacity (…66) -- too faint to read against the dark grid,
+    // which is exactly what made the volume pane hard to see at a glance.
+    volUp: "#10b981b3",
+    volDown: "#ef4444b3",
     drawLine: "#f472b6",
     support: "#34d399",
     // Was #fb923c (orange), too close to MA200's amber (#f59e0b) at a
@@ -64,8 +66,8 @@ const PALETTES = {
     border: "#cbd5e1",
     up: "#059669",
     down: "#dc2626",
-    volUp: "#05966955",
-    volDown: "#dc262655",
+    volUp: "#059669b3",
+    volDown: "#dc2626b3",
     drawLine: "#db2777",
     support: "#059669",
     resistance: "#e11d48",
@@ -195,7 +197,7 @@ export default function StockChart({
       wickUpColor: palette.up,
       wickDownColor: palette.down,
     });
-    candleSeries.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.3 } });
+    candleSeries.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.25 } });
     candleSeries.setData(
       candles.map((c) => ({
         time: toTime(c.time) as Time,
@@ -210,7 +212,10 @@ export default function StockChart({
       priceFormat: { type: "volume" },
       priceScaleId: "",
     });
-    volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+    // A bit more height (was top: 0.8, a 20% band) plus the higher-opacity
+    // colors above -- the previous combo made volume hard to make out at a
+    // glance, per feedback.
+    volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.75, bottom: 0 } });
     volumeSeries.setData(
       candles.map((c) => ({
         time: toTime(c.time) as Time,
@@ -473,7 +478,12 @@ export default function StockChart({
           )}
         </div>
       </div>
-      <div ref={containerRef} className="min-h-0 flex-1" />
+      <div className="relative min-h-0 flex-1">
+        <div ref={containerRef} className="h-full w-full" />
+        <span className="pointer-events-none absolute bottom-1 left-1 text-[10px] font-medium text-slate-400 dark:text-slate-600">
+          Volume
+        </span>
+      </div>
     </div>
   );
 }
