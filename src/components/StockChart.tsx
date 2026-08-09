@@ -7,7 +7,9 @@ import {
   HistogramSeries,
   LineSeries,
   LineStyle,
-  type IPriceLine,
+  type IChartApi,
+  type ISeriesApi,
+  type MouseEventParams,
   type Time,
 } from "lightweight-charts";
 import type { Candle } from "@/lib/market/yahoo";
@@ -95,6 +97,17 @@ export default function StockChart({
   const [visibleMAs, setVisibleMAs] = useState<Set<number>>(new Set([20, 50, 200]));
   const [showLevels, setShowLevels] = useState(true);
 
+  // Split into one effect that creates the chart + candle/volume series (the
+  // expensive part, and the only part that truly needs a full teardown-and-
+  // rebuild) plus small effects that layer MAs, trendlines and S/R price
+  // lines on top by adding/removing just those series. Previously all of
+  // this lived in one effect keyed on every piece of chart state, so toggling
+  // an MA, drawing a trendline, or hiding S/R levels tore down and redrew the
+  // whole chart (candles, volume, everything) -- visibly janky, and it reset
+  // any zoom/pan the user had set.
+  const [chart, setChart] = useState<IChartApi | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+
   // A page restored from the browser's back/forward cache (bfcache) resumes
   // its JS exactly where it left off -- no effects re-run -- but the
   // canvas this chart is drawn on can still lose its actual pixel content
@@ -146,6 +159,8 @@ export default function StockChart({
     await removeDrawing(symbol, timeframeKey, id);
   }
 
+  // Creates the chart itself plus the candle/volume series -- only reruns
+  // when the underlying data, timeframe, or theme actually changes.
   useEffect(() => {
     const container = containerRef.current;
     if (!container || candles.length === 0) return;
@@ -153,7 +168,7 @@ export default function StockChart({
     const palette = PALETTES[theme];
     const toTime = intraday ? toIntradayTime : toDailyTime;
 
-    const chart = createChart(container, {
+    const newChart = createChart(container, {
       width: container.clientWidth,
       height: container.clientHeight,
       layout: {
@@ -173,7 +188,7 @@ export default function StockChart({
       crosshair: { mode: 0 },
     });
 
-    const candleSeries = chart.addSeries(CandlestickSeries, {
+    const candleSeries = newChart.addSeries(CandlestickSeries, {
       upColor: palette.up,
       downColor: palette.down,
       borderVisible: false,
@@ -191,7 +206,7 @@ export default function StockChart({
       })),
     );
 
-    const volumeSeries = chart.addSeries(HistogramSeries, {
+    const volumeSeries = newChart.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" },
       priceScaleId: "",
     });
@@ -204,7 +219,33 @@ export default function StockChart({
       })),
     );
 
+    newChart.timeScale().fitContent();
+    candleSeriesRef.current = candleSeries;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) newChart.applyOptions({ width: entry.contentRect.width });
+    });
+    resizeObserver.observe(container);
+
+    setChart(newChart);
+
+    return () => {
+      resizeObserver.disconnect();
+      candleSeriesRef.current = null;
+      setChart(null);
+      newChart.remove();
+    };
+  }, [candles, intraday, theme, symbol, timeframeKey, bfcacheRebuildKey]);
+
+  // Layers moving-average lines on top of the existing chart -- toggling one
+  // no longer touches the candle/volume series or the user's zoom/pan.
+  useEffect(() => {
+    if (!chart) return;
+    const toTime = intraday ? toIntradayTime : toDailyTime;
     const closes = candles.map((c) => c.close);
+    const added: ISeriesApi<"Line">[] = [];
+
     for (const { period, color } of MA_PERIODS) {
       if (candles.length < period || !visibleMAs.has(period)) continue;
       const values = sma(closes, period);
@@ -219,14 +260,27 @@ export default function StockChart({
           .map((c, i) => ({ time: toTime(c.time) as Time, value: values[i] }))
           .filter((point): point is { time: Time; value: number } => point.value != null),
       );
+      added.push(lineSeries);
     }
+
+    return () => {
+      for (const series of added) chart.removeSeries(series);
+    };
+  }, [chart, candles, intraday, visibleMAs]);
+
+  // Layers saved trendlines on top -- adding/removing one no longer rebuilds
+  // the whole chart.
+  useEffect(() => {
+    if (!chart) return;
+    const palette = PALETTES[theme];
+    const added: ISeriesApi<"Line">[] = [];
 
     for (const line of drawings) {
       // Defensively skip any already-saved degenerate line (identical
       // start/end time, e.g. from a pre-fix mobile double-tap) --
       // lightweight-charts doesn't handle duplicate time values on a line
       // series cleanly, and this data may already exist in storage from
-      // before the click-handler guard above was added.
+      // before the click-handler guard below was added.
       if (line.time1 === line.time2) continue;
       const delta = lineDeltaPercent(line);
       const lineSeries = chart.addSeries(LineSeries, {
@@ -242,12 +296,25 @@ export default function StockChart({
         { time: line.time1 as Time, value: line.price1 },
         { time: line.time2 as Time, value: line.price2 },
       ]);
+      added.push(lineSeries);
     }
 
-    const priceLines: IPriceLine[] = [];
+    return () => {
+      for (const series of added) chart.removeSeries(series);
+    };
+  }, [chart, drawings, theme]);
+
+  // Layers support/resistance price lines -- toggling visibility no longer
+  // rebuilds the whole chart.
+  useEffect(() => {
+    const candleSeries = candleSeriesRef.current;
+    if (!chart || !candleSeries) return;
+    const palette = PALETTES[theme];
+    const added: ReturnType<ISeriesApi<"Candlestick">["createPriceLine"]>[] = [];
+
     if (showLevels) {
       for (const level of levels) {
-        priceLines.push(
+        added.push(
           candleSeries.createPriceLine({
             price: level.price,
             color: level.type === "support" ? palette.support : palette.resistance,
@@ -260,10 +327,21 @@ export default function StockChart({
       }
     }
 
-    chart.timeScale().fitContent();
+    return () => {
+      for (const line of added) candleSeries.removePriceLine(line);
+    };
+  }, [chart, levels, showLevels, theme]);
 
-    chart.subscribeClick((param) => {
-      if (!drawModeRef.current || !param.point || param.time == null) return;
+  // Registers the trendline-drawing click handler once per chart instance,
+  // independent of MA/drawing/level state, so it doesn't need to be torn
+  // down and resubscribed on every unrelated toggle.
+  useEffect(() => {
+    if (!chart) return;
+    const candleSeries = candleSeriesRef.current;
+    if (!candleSeries) return;
+
+    function handleClick(param: MouseEventParams<Time>) {
+      if (!drawModeRef.current || !param.point || param.time == null || !candleSeries) return;
       const price = candleSeries.coordinateToPrice(param.point.y);
       if (price == null) return;
 
@@ -301,20 +379,11 @@ export default function StockChart({
       addDrawing(symbol, timeframeKey, newLine).then((saved) => {
         setDrawings((prev) => [...prev, saved]);
       });
-    });
+    }
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) chart.applyOptions({ width: entry.contentRect.width });
-    });
-    resizeObserver.observe(container);
-
-    return () => {
-      resizeObserver.disconnect();
-      for (const line of priceLines) candleSeries.removePriceLine(line);
-      chart.remove();
-    };
-  }, [candles, intraday, theme, drawings, symbol, timeframeKey, visibleMAs, levels, showLevels, bfcacheRebuildKey]);
+    chart.subscribeClick(handleClick);
+    return () => chart.unsubscribeClick(handleClick);
+  }, [chart, symbol, timeframeKey]);
 
   if (candles.length === 0) {
     return (
