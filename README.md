@@ -141,9 +141,63 @@ browser's local storage, not the account).
   a glance" summary and expand on click (`CollapsibleCardShell`), so the
   page doesn't dump a wall of detail on mobile. Chart + News share the main
   column so there's no leftover gap next to a shorter sidebar on desktop.
+- **Sector drill-down:** clicking a sector on the home page
+  (`src/app/(app)/sector/[symbol]/page.tsx`) ranks that sector's major
+  constituents (`src/lib/market/sector-constituents.ts` — a curated list,
+  not the official reweighted holdings, which isn't free) by day/month/
+  quarter performance, each linking straight to its own stock page.
+- **Compare mode:** `/compare` overlays up to 4 tickers' normalized
+  (%-change-from-start) performance on one chart (`src/lib/market/compare.ts`,
+  `src/app/api/market/compare/route.ts`), with a sorted period-return list
+  underneath. Reachable from the nav and from a "Compare" link on every
+  stock page.
+- **Earnings-proximity banner:** flags on the stock page when the next
+  earnings date is within 5 days (`EARNINGS_PROXIMITY_DAYS` in
+  `src/lib/market/calendar.ts`), since that's when options pricing moves
+  the most.
+- **Historical volatility:** 20-day and 60-day annualized volatility from
+  daily log returns (`src/lib/market/volatility.ts`), computed from a
+  dedicated daily-candle fetch independent of whatever candle size the
+  chart itself is showing. Labeled explicitly as realized/historical, not
+  the options market's implied volatility.
+- **Short interest:** only surfaced when actually notable (days-to-cover
+  ≥ 3, from Nasdaq's bi-monthly settlement data,
+  `src/lib/market/short-interest.ts`), and tagged "New" vs "Established"
+  depending on whether recent prior settlement periods were elevated too.
+- **Insider activity:** Form 4 filing count and dates over the trailing 90
+  days (`src/lib/market/insider.ts`), via SEC EDGAR's free ticker→CIK
+  mapping and submissions API, linking out to each filing and to the full
+  EDGAR history. Deliberately does **not** parse buy/sell direction, share
+  count, or price — see "Where we had to compromise" below.
+
+## Where we had to compromise
+
+A few requested features either aren't fully buildable on free data, or
+needed a scoped-down version instead of the "real" thing:
+
+- **Insider buy/sell detail.** SEC EDGAR's filing list is free and clean,
+  but the actual Form 4 documents are served as SEC's XSLT-rendered HTML,
+  not structured data — reliably parsing direction, share count, and price
+  out of that would mean scraping a government template, which breaks
+  silently whenever SEC changes it. Shipped as filing-count + dates +
+  direct links instead, explicitly labeled as such.
+- **Per-analyst ratings breakdown.** Nasdaq's free API gives a consensus
+  1-year price target only; a per-analyst breakdown (who rated what, when)
+  is a paid data product everywhere we checked.
+- **Official sector holdings.** The sector drill-down uses a curated list
+  of ~8 large-cap constituents per sector ETF, not the official,
+  continuously-reweighted holdings list — that's not published free either.
+- **True push notifications.** Alerts fire in-app only, via a 5-minute poll
+  while the app is open (`AlertsWatcher.tsx`) and a browser Notification.
+  Real push (fires even with the app closed) needs a deployed server with a
+  scheduler and VAPID keys — not something that makes sense to build before
+  the app is actually deployed somewhere with a scheduler available.
+- **Position size / liquidity checks.** Considered and intentionally
+  dropped at your request — you're using this for options trades and don't
+  need either.
 
 ## What's next
 
 Ideas for later: true push notifications (once deployed), per-analyst
-ratings breakdowns (would need a paid API), sector/market-wide auto-analysis,
-multi-line/annotation drawing tools.
+ratings breakdowns (would need a paid API), multi-line/annotation drawing
+tools.
