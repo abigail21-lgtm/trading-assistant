@@ -34,7 +34,7 @@ export async function getCompanyFacts(
 
   let res: Response;
   try {
-    res = await fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: revalidateSeconds } });
+    res = await fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: revalidateSeconds }, signal: AbortSignal.timeout(8000) });
   } catch {
     return null;
   }

@@ -25,7 +25,7 @@ export async function getShortInterestHistory(symbol: string): Promise<ShortInte
   const url = `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/short-interest?assetclass=stocks`;
   let res: Response;
   try {
-    res = await fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: 21600 } });
+    res = await fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: 21600 }, signal: AbortSignal.timeout(8000) });
   } catch {
     return [];
   }

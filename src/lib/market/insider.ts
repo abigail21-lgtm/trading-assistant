@@ -22,6 +22,8 @@ async function getCik(symbol: string): Promise<string | null> {
       headers: SEC_HEADERS,
       // This file covers every ticker and barely changes day to day.
       next: { revalidate: 86_400 },
+      // Larger file than the other endpoints here, hence the longer budget.
+      signal: AbortSignal.timeout(10000),
     });
   } catch {
     return null;
@@ -58,6 +60,7 @@ export async function getInsiderActivity(symbol: string, windowDays = 90): Promi
     res = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, {
       headers: SEC_HEADERS,
       next: { revalidate: 21_600 },
+      signal: AbortSignal.timeout(8000),
     });
   } catch {
     return null;

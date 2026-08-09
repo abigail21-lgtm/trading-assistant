@@ -27,7 +27,11 @@ async function fetchEarningsForDate(dateStr: string): Promise<EarningsEvent[]> {
   const url = `https://api.nasdaq.com/api/calendar/earnings?date=${dateStr}`;
   let res: Response;
   try {
-    res = await fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: 21600 } });
+    // This runs 30x in parallel (one per day in the lookback window) via
+    // Promise.allSettled, which only resolves once every one of them
+    // settles -- a single hanging date with no timeout blocks the entire
+    // earnings calendar, and everything awaiting it, indefinitely.
+    res = await fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: 21600 }, signal: AbortSignal.timeout(6000) });
   } catch {
     return [];
   }
