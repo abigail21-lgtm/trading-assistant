@@ -37,6 +37,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# scratch: local source files for published Artifacts (mockups, icon
+# concepts) — not app code, not meant to be tracked
+/scratch/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
