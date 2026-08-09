@@ -34,21 +34,36 @@ export default function AlertBuilder({
   const [submitting, setSubmitting] = useState(false);
 
   function addCondition() {
+    let next: AlertCondition;
     if (kind === "price_above" || kind === "price_below") {
       const price = parseFloat(targetPrice);
       if (!Number.isFinite(price) || price <= 0) return;
-      setConditions((prev) => [...prev, { kind, targetPrice: price }]);
+      next = { kind, targetPrice: price };
     } else if (kind === "ma_cross_above" || kind === "ma_cross_below") {
       const period = parseInt(maPeriod, 10);
       if (!Number.isInteger(period) || period < 2 || period > 400) return;
-      setConditions((prev) => [...prev, { kind, maPeriod: period }]);
+      next = { kind, maPeriod: period };
     } else if (kind === "volume_spike") {
       const m = parseFloat(multiplier);
       if (!Number.isFinite(m) || m <= 0) return;
-      setConditions((prev) => [...prev, { kind, multiplier: m }]);
+      next = { kind, multiplier: m };
     } else {
-      setConditions((prev) => [...prev, { kind }]);
+      next = { kind };
     }
+
+    // The draft form doesn't clear itself after adding, so clicking
+    // "+ Add condition" a second time without changing anything used to
+    // silently add an identical duplicate -- guard against that directly.
+    const isDuplicate = conditions.some((c) => JSON.stringify(c) === JSON.stringify(next));
+    if (isDuplicate) return;
+
+    setConditions((prev) => [...prev, next]);
+
+    // Reset the draft so it's visually obvious the add went through, and a
+    // second click needs a deliberate new value rather than reusing the old one.
+    if (kind === "price_above" || kind === "price_below") setTargetPrice(currentPrice ? currentPrice.toFixed(2) : "");
+    else if (kind === "ma_cross_above" || kind === "ma_cross_below") setMaPeriod("50");
+    else if (kind === "volume_spike") setMultiplier("1.5");
   }
 
   function removeCondition(index: number) {
