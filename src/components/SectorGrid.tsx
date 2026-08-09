@@ -1,0 +1,24 @@
+import type { QuoteResult } from "@/lib/market/yahoo";
+import { changeColorClass, formatPercent } from "@/lib/format";
+
+export default function SectorGrid({ sectors }: { sectors: QuoteResult[] }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+      {sectors.map((sector) => (
+        <div
+          key={sector.symbol}
+          className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2.5"
+        >
+          <p className="truncate text-xs font-medium text-slate-400">{sector.name}</p>
+          <p
+            className={`mt-0.5 text-sm font-semibold ${
+              sector.ok ? changeColorClass(sector.changePercent) : "text-slate-600"
+            }`}
+          >
+            {sector.ok ? formatPercent(sector.changePercent) : "—"}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
