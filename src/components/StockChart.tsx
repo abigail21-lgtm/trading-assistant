@@ -17,7 +17,7 @@ import { sma } from "@/lib/market/indicators";
 import type { SupportResistanceLevel } from "@/lib/market/analysis";
 import type { TrendLine, NewTrendLine } from "@/lib/market/drawings";
 import { addDrawing, clearDrawings, getDrawings, removeDrawing } from "@/lib/drawings-client";
-import { formatPercent } from "@/lib/format";
+import { formatPercent, formatPrice } from "@/lib/format";
 import { useDomTheme } from "@/lib/useDomTheme";
 
 function lineDeltaPercent(line: TrendLine): number | null {
@@ -93,9 +93,13 @@ export default function StockChart({
   const theme = useDomTheme();
 
   const [drawings, setDrawings] = useState<TrendLine[]>([]);
-  const [drawMode, setDrawMode] = useState(false);
+  // "choosing": the two-option prompt is showing, after clicking "Draw
+  // line" but before picking trend vs. horizontal. "trend" is the existing
+  // two-click sloped line; "horizontal" completes on a single click, for a
+  // user-marked support/resistance level.
+  const [drawStage, setDrawStage] = useState<"idle" | "choosing" | "trend" | "horizontal">("idle");
   const [hasPendingPoint, setHasPendingPoint] = useState(false);
-  const drawModeRef = useRef(false);
+  const drawStageRef = useRef<"idle" | "choosing" | "trend" | "horizontal">("idle");
   const pendingPointRef = useRef<{ time: Time; price: number; capturedAtMs: number } | null>(null);
 
   const [visibleMAs, setVisibleMAs] = useState<Set<number>>(new Set([20, 50, 200]));
@@ -136,10 +140,26 @@ export default function StockChart({
     };
   }, [symbol, timeframeKey]);
 
-  function toggleDrawMode() {
-    const next = !drawMode;
-    setDrawMode(next);
-    drawModeRef.current = next;
+  function startChoosing() {
+    drawStageRef.current = "choosing";
+    setDrawStage("choosing");
+  }
+
+  function chooseTrend() {
+    drawStageRef.current = "trend";
+    setDrawStage("trend");
+    pendingPointRef.current = null;
+    setHasPendingPoint(false);
+  }
+
+  function chooseHorizontal() {
+    drawStageRef.current = "horizontal";
+    setDrawStage("horizontal");
+  }
+
+  function cancelDraw() {
+    drawStageRef.current = "idle";
+    setDrawStage("idle");
     pendingPointRef.current = null;
     setHasPendingPoint(false);
   }
@@ -275,14 +295,32 @@ export default function StockChart({
     };
   }, [chart, candles, intraday, visibleMAs]);
 
-  // Layers saved trendlines on top -- adding/removing one no longer rebuilds
-  // the whole chart.
+  // Layers saved lines on top -- adding/removing one no longer rebuilds the
+  // whole chart. Two kinds: two-point "trend" lines (a LineSeries between
+  // the two points) and one-point "horizontal" lines (a full-width price
+  // line, same mechanism as the automatic S/R levels below).
   useEffect(() => {
-    if (!chart) return;
+    const candleSeries = candleSeriesRef.current;
+    if (!chart || !candleSeries) return;
     const palette = PALETTES[theme];
-    const added: ISeriesApi<"Line">[] = [];
+    const addedSeries: ISeriesApi<"Line">[] = [];
+    const addedPriceLines: ReturnType<ISeriesApi<"Candlestick">["createPriceLine"]>[] = [];
 
     for (const line of drawings) {
+      if (line.type === "horizontal") {
+        addedPriceLines.push(
+          candleSeries.createPriceLine({
+            price: line.price1,
+            color: palette.drawLine,
+            lineWidth: 2,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: "S/R (yours)",
+          }),
+        );
+        continue;
+      }
+
       // Defensively skip any already-saved degenerate line (identical
       // start/end time, e.g. from a pre-fix mobile double-tap) --
       // lightweight-charts doesn't handle duplicate time values on a line
@@ -303,11 +341,12 @@ export default function StockChart({
         { time: line.time1 as Time, value: line.price1 },
         { time: line.time2 as Time, value: line.price2 },
       ]);
-      added.push(lineSeries);
+      addedSeries.push(lineSeries);
     }
 
     return () => {
-      for (const series of added) chart.removeSeries(series);
+      for (const series of addedSeries) chart.removeSeries(series);
+      for (const priceLine of addedPriceLines) candleSeries.removePriceLine(priceLine);
     };
   }, [chart, drawings, theme]);
 
@@ -351,9 +390,32 @@ export default function StockChart({
     if (!candleSeries) return;
 
     function handleClick(param: MouseEventParams<Time>) {
-      if (!drawModeRef.current || !param.point || param.time == null || !candleSeries) return;
+      const stage = drawStageRef.current;
+      if ((stage !== "trend" && stage !== "horizontal") || !param.point || param.time == null || !candleSeries) return;
       const price = candleSeries.coordinateToPrice(param.point.y);
       if (price == null) return;
+
+      if (stage === "horizontal") {
+        // Completes on a single click -- no second point needed.
+        drawStageRef.current = "idle";
+        setDrawStage("idle");
+        const newLine: NewTrendLine = {
+          type: "horizontal",
+          time1: param.time as string | number,
+          price1: price,
+          time2: param.time as string | number,
+          price2: price,
+        };
+        addDrawing(symbol, timeframeKey, newLine)
+          .then((saved) => {
+            setDrawings((prev) => [...prev, saved]);
+          })
+          .catch(() => {
+            // Save failed -- leave the line undrawn rather than showing one
+            // that didn't actually persist.
+          });
+        return;
+      }
 
       if (!pendingPointRef.current) {
         pendingPointRef.current = { time: param.time, price, capturedAtMs: Date.now() };
@@ -377,10 +439,11 @@ export default function StockChart({
 
       pendingPointRef.current = null;
       setHasPendingPoint(false);
-      drawModeRef.current = false;
-      setDrawMode(false);
+      drawStageRef.current = "idle";
+      setDrawStage("idle");
 
       const newLine: NewTrendLine = {
+        type: "trend",
         time1: start.time as string | number,
         price1: start.price,
         time2: param.time as string | number,
@@ -412,29 +475,67 @@ export default function StockChart({
     <div className="flex h-full flex-col">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs">
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={toggleDrawMode}
-            className={`rounded-md px-2 py-1 font-medium transition ${
-              drawMode
-                ? "bg-emerald-600 text-white"
-                : "border border-slate-200 text-slate-500 hover:text-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-            }`}
-          >
-            {drawMode ? (hasPendingPoint ? "Click end point…" : "Click start point…") : "Draw trendline"}
-          </button>
+          {drawStage === "idle" && (
+            <button
+              type="button"
+              onClick={startChoosing}
+              className="rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-500 transition hover:text-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            >
+              Draw line
+            </button>
+          )}
+          {drawStage === "choosing" && (
+            <>
+              <button
+                type="button"
+                onClick={chooseTrend}
+                className="rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 transition hover:border-emerald-500 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-500 dark:hover:text-emerald-400"
+              >
+                Trendline (2 points)
+              </button>
+              <button
+                type="button"
+                onClick={chooseHorizontal}
+                className="rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 transition hover:border-emerald-500 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-500 dark:hover:text-emerald-400"
+              >
+                Support/Resistance (1 point)
+              </button>
+              <button
+                type="button"
+                onClick={cancelDraw}
+                className="px-2 py-1 font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                Cancel
+              </button>
+            </>
+          )}
+          {(drawStage === "trend" || drawStage === "horizontal") && (
+            <button
+              type="button"
+              onClick={cancelDraw}
+              className="rounded-md bg-emerald-600 px-2 py-1 font-medium text-white transition"
+            >
+              {drawStage === "horizontal"
+                ? "Click a price…"
+                : hasPendingPoint
+                  ? "Click end point…"
+                  : "Click start point…"}
+            </button>
+          )}
           {drawings.map((line) => {
-            const delta = lineDeltaPercent(line);
+            const isHorizontal = line.type === "horizontal";
+            const delta = isHorizontal ? null : lineDeltaPercent(line);
+            const label = isHorizontal ? formatPrice(line.price1) : delta != null ? formatPercent(delta) : "Line";
             return (
               <span
                 key={line.id}
                 className="flex items-center gap-1 rounded-md border border-slate-200 py-1 pl-2 pr-1 font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300"
               >
-                {delta != null ? formatPercent(delta) : "Line"}
+                {label}
                 <button
                   type="button"
                   onClick={() => handleRemoveLine(line.id)}
-                  aria-label="Remove this trendline"
+                  aria-label={isHorizontal ? "Remove this level" : "Remove this trendline"}
                   className="rounded p-0.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3 w-3">
