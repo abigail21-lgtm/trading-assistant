@@ -8,7 +8,7 @@ import SectorGrid from "@/components/SectorGrid";
 import WatchlistSection from "@/components/WatchlistSection";
 import WatchlistCalendarSection from "@/components/WatchlistCalendarSection";
 import AlertsOverview from "@/components/AlertsOverview";
-import NewsList from "@/components/NewsList";
+import CollapsibleNewsSection from "@/components/CollapsibleNewsSection";
 import { SentimentBadge } from "@/components/SentimentCard";
 
 export const revalidate = 300;
@@ -68,12 +68,7 @@ export default async function HomePage() {
           <AlertsOverview />
           <WatchlistCalendarSection />
 
-          <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Market News
-            </h2>
-            <NewsList items={marketNews} />
-          </section>
+          <CollapsibleNewsSection items={marketNews} title="Market News" />
         </div>
       </div>
     </div>

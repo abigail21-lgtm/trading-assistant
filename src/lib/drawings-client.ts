@@ -55,6 +55,18 @@ export async function addDrawing(symbol: string, timeframeKey: string, line: New
   return full;
 }
 
+export async function removeDrawing(symbol: string, timeframeKey: string, id: string): Promise<void> {
+  if (!isSupabaseConfigured) {
+    writeLocal(symbol, timeframeKey, readLocal(symbol, timeframeKey).filter((l) => l.id !== id));
+    return;
+  }
+
+  await fetch(
+    `/api/drawings?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframeKey)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function clearDrawings(symbol: string, timeframeKey: string): Promise<void> {
   if (!isSupabaseConfigured) {
     writeLocal(symbol, timeframeKey, []);

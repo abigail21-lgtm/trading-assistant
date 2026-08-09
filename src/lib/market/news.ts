@@ -1,5 +1,7 @@
 import { BROWSER_HEADERS } from "./http";
 
+export type HeadlineTone = "bullish" | "bearish" | "neutral";
+
 export interface NewsItem {
   id: string;
   title: string;
@@ -7,6 +9,30 @@ export interface NewsItem {
   link: string;
   publishedAt: number; // unix seconds
   thumbnail: string | null;
+  tone: HeadlineTone;
+}
+
+// Rough, headline-only keyword read — not real sentiment analysis. Good
+// enough to flag "probably worth a look" at a glance, not to trust blindly.
+const BULLISH_WORDS = [
+  "upgrade", "upgraded", "beats", "beat", "raises", "raised", "surge", "surges", "soar", "soars",
+  "jumps", "rally", "rallies", "outperform", "record high", "all-time high", "bullish", "tops",
+  "gains", "gain", "climb", "climbs", "buy rating", "strong buy", "profit rise", "wins",
+];
+const BEARISH_WORDS = [
+  "downgrade", "downgraded", "misses", "miss", "cuts", "cut", "plunge", "plunges", "slump",
+  "falls", "fall", "drops", "drop", "underperform", "lawsuit", "investigation", "recall",
+  "bearish", "warns", "warning", "loss", "losses", "layoffs", "sell rating", "sinks", "tumbles",
+  "probe", "fraud", "delisted",
+];
+
+function classifyHeadline(title: string): HeadlineTone {
+  const lower = title.toLowerCase();
+  const bullish = BULLISH_WORDS.some((w) => lower.includes(w));
+  const bearish = BEARISH_WORDS.some((w) => lower.includes(w));
+  if (bullish && !bearish) return "bullish";
+  if (bearish && !bullish) return "bearish";
+  return "neutral";
 }
 
 // Yahoo's keyless search endpoint doubles as a news search — used both for
@@ -37,6 +63,7 @@ async function fetchYahooNews(query: string, count: number, revalidateSeconds: n
         link: n.link,
         publishedAt: n.providerPublishTime ?? 0,
         thumbnail: n.thumbnail?.resolutions?.[0]?.url ?? null,
+        tone: classifyHeadline(n.title),
       };
     })
     .filter((n): n is NewsItem => n !== null);

@@ -75,14 +75,14 @@ export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const symbol = searchParams.get("symbol")?.toUpperCase();
   const timeframe = searchParams.get("timeframe");
+  const id = searchParams.get("id");
   if (!symbol || !timeframe) return NextResponse.json({ error: "Missing symbol or timeframe" }, { status: 400 });
 
-  const { error } = await supabase
-    .from("drawings")
-    .delete()
-    .eq("user_id", user.id)
-    .eq("symbol", symbol)
-    .eq("timeframe", timeframe);
+  // With an id: delete just that one line. Without: clear every line for
+  // this symbol + timeframe (the chart's "Clear lines" action).
+  let query = supabase.from("drawings").delete().eq("user_id", user.id).eq("symbol", symbol).eq("timeframe", timeframe);
+  if (id) query = query.eq("id", id);
+  const { error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

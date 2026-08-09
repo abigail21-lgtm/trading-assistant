@@ -26,3 +26,20 @@ export const DEFAULT_TIMEFRAME_KEY = "1d";
 export function getTimeframe(key: string | undefined): Timeframe {
   return TIMEFRAMES.find((tf) => tf.key === key) ?? TIMEFRAMES.find((tf) => tf.key === DEFAULT_TIMEFRAME_KEY)!;
 }
+
+const RANGE_LABELS: Record<string, string> = {
+  "1d": "1 day",
+  "5d": "5 days",
+  "1mo": "1 month",
+  "3mo": "3 months",
+  "6mo": "6 months",
+  "1y": "1 year",
+  "5y": "5 years",
+  max: "max history",
+};
+
+/** Human label for how far back a timeframe's chart looks — distinct from
+ * `label`, which names the candle size (e.g. "D"), not the lookback range. */
+export function rangeLabel(range: string): string {
+  return RANGE_LABELS[range] ?? range;
+}

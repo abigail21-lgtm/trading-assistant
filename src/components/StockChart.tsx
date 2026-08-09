@@ -7,12 +7,20 @@ import {
   HistogramSeries,
   LineSeries,
   LineStyle,
+  type IPriceLine,
   type Time,
 } from "lightweight-charts";
 import type { Candle } from "@/lib/market/yahoo";
 import { sma } from "@/lib/market/indicators";
+import type { SupportResistanceLevel } from "@/lib/market/analysis";
 import type { TrendLine, NewTrendLine } from "@/lib/market/drawings";
-import { addDrawing, clearDrawings, getDrawings } from "@/lib/drawings-client";
+import { addDrawing, clearDrawings, getDrawings, removeDrawing } from "@/lib/drawings-client";
+import { formatPercent } from "@/lib/format";
+
+function lineDeltaPercent(line: TrendLine): number | null {
+  if (!line.price1) return null;
+  return ((line.price2 - line.price1) / line.price1) * 100;
+}
 
 function toDailyTime(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toISOString().slice(0, 10);
@@ -41,6 +49,8 @@ const PALETTES = {
     volUp: "#10b98166",
     volDown: "#ef444466",
     drawLine: "#f472b6",
+    support: "#34d399",
+    resistance: "#fb923c",
   },
   light: {
     text: "#64748b",
@@ -51,6 +61,8 @@ const PALETTES = {
     volUp: "#05966955",
     volDown: "#dc262655",
     drawLine: "#db2777",
+    support: "#059669",
+    resistance: "#ea580c",
   },
 } as const;
 
@@ -78,11 +90,13 @@ export default function StockChart({
   intraday = false,
   symbol,
   timeframeKey,
+  levels = [],
 }: {
   candles: Candle[];
   intraday?: boolean;
   symbol: string;
   timeframeKey: string;
+  levels?: SupportResistanceLevel[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const theme = useDomTheme();
@@ -92,6 +106,9 @@ export default function StockChart({
   const [hasPendingPoint, setHasPendingPoint] = useState(false);
   const drawModeRef = useRef(false);
   const pendingPointRef = useRef<{ time: Time; price: number } | null>(null);
+
+  const [visibleMAs, setVisibleMAs] = useState<Set<number>>(new Set([20, 50, 200]));
+  const [showLevels, setShowLevels] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,9 +128,23 @@ export default function StockChart({
     setHasPendingPoint(false);
   }
 
+  function toggleMA(period: number) {
+    setVisibleMAs((prev) => {
+      const next = new Set(prev);
+      if (next.has(period)) next.delete(period);
+      else next.add(period);
+      return next;
+    });
+  }
+
   async function handleClear() {
     setDrawings([]);
     await clearDrawings(symbol, timeframeKey);
+  }
+
+  async function handleRemoveLine(id: string) {
+    setDrawings((prev) => prev.filter((l) => l.id !== id));
+    await removeDrawing(symbol, timeframeKey, id);
   }
 
   useEffect(() => {
@@ -176,7 +207,7 @@ export default function StockChart({
 
     const closes = candles.map((c) => c.close);
     for (const { period, color } of MA_PERIODS) {
-      if (candles.length < period) continue;
+      if (candles.length < period || !visibleMAs.has(period)) continue;
       const values = sma(closes, period);
       const lineSeries = chart.addSeries(LineSeries, {
         color,
@@ -192,18 +223,36 @@ export default function StockChart({
     }
 
     for (const line of drawings) {
+      const delta = lineDeltaPercent(line);
       const lineSeries = chart.addSeries(LineSeries, {
         color: palette.drawLine,
         lineWidth: 2,
         lineStyle: LineStyle.Dashed,
         priceLineVisible: false,
-        lastValueVisible: false,
+        lastValueVisible: true,
         crosshairMarkerVisible: false,
+        title: delta != null ? formatPercent(delta) : "",
       });
       lineSeries.setData([
         { time: line.time1 as Time, value: line.price1 },
         { time: line.time2 as Time, value: line.price2 },
       ]);
+    }
+
+    const priceLines: IPriceLine[] = [];
+    if (showLevels) {
+      for (const level of levels) {
+        priceLines.push(
+          candleSeries.createPriceLine({
+            price: level.price,
+            color: level.type === "support" ? palette.support : palette.resistance,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: level.type === "support" ? "Support" : "Resistance",
+          }),
+        );
+      }
     }
 
     chart.timeScale().fitContent();
@@ -244,9 +293,10 @@ export default function StockChart({
 
     return () => {
       resizeObserver.disconnect();
+      for (const line of priceLines) candleSeries.removePriceLine(line);
       chart.remove();
     };
-  }, [candles, intraday, theme, drawings, symbol, timeframeKey]);
+  }, [candles, intraday, theme, drawings, symbol, timeframeKey, visibleMAs, levels, showLevels]);
 
   if (candles.length === 0) {
     return (
@@ -258,8 +308,8 @@ export default function StockChart({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-1 flex items-center justify-between text-xs">
-        <div className="flex items-center gap-2">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={toggleDrawMode}
@@ -271,13 +321,67 @@ export default function StockChart({
           >
             {drawMode ? (hasPendingPoint ? "Click end point…" : "Click start point…") : "Draw trendline"}
           </button>
-          {drawings.length > 0 && (
+          {drawings.map((line) => {
+            const delta = lineDeltaPercent(line);
+            return (
+              <span
+                key={line.id}
+                className="flex items-center gap-1 rounded-md border border-slate-200 py-1 pl-2 pr-1 font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300"
+              >
+                {delta != null ? formatPercent(delta) : "Line"}
+                <button
+                  type="button"
+                  onClick={() => handleRemoveLine(line.id)}
+                  aria-label="Remove this trendline"
+                  className="rounded p-0.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3 w-3">
+                    <path strokeLinecap="round" d="M6 6l12 12M18 6 6 18" />
+                  </svg>
+                </button>
+              </span>
+            );
+          })}
+          {drawings.length > 1 && (
             <button
               type="button"
               onClick={handleClear}
               className="rounded-md px-2 py-1 font-medium text-slate-500 transition hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400"
             >
-              Clear lines
+              Clear all
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {MA_PERIODS.map(({ period, color }) => (
+            <button
+              key={period}
+              type="button"
+              onClick={() => toggleMA(period)}
+              className="flex items-center gap-1 font-medium"
+              style={{ color: visibleMAs.has(period) ? color : undefined }}
+              aria-pressed={visibleMAs.has(period)}
+            >
+              <span
+                className="h-0.5 w-3 rounded-full"
+                style={{ backgroundColor: visibleMAs.has(period) ? color : "#94a3b8" }}
+              />
+              <span className={visibleMAs.has(period) ? "" : "text-slate-400 dark:text-slate-600"}>
+                MA{period}
+              </span>
+            </button>
+          ))}
+          {levels.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowLevels((v) => !v)}
+              aria-pressed={showLevels}
+              className={`font-medium ${
+                showLevels ? "text-slate-600 dark:text-slate-300" : "text-slate-400 dark:text-slate-600"
+              }`}
+            >
+              S/R levels
             </button>
           )}
         </div>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { QuoteResult } from "@/lib/market/yahoo";
 import { changeColorClass, formatPercent } from "@/lib/format";
 
@@ -5,9 +6,10 @@ export default function SectorGrid({ sectors }: { sectors: QuoteResult[] }) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
       {sectors.map((sector) => (
-        <div
+        <Link
           key={sector.symbol}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900"
+          href={`/sector/${sector.symbol}`}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
         >
           <p className="truncate text-xs font-medium text-slate-500 dark:text-slate-400">{sector.name}</p>
           <p
@@ -17,7 +19,7 @@ export default function SectorGrid({ sectors }: { sectors: QuoteResult[] }) {
           >
             {sector.ok ? formatPercent(sector.changePercent) : "—"}
           </p>
-        </div>
+        </Link>
       ))}
     </div>
   );
