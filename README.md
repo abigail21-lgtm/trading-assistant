@@ -96,9 +96,27 @@ browser's local storage, not the account).
   static-asset caching for offline resilience. Market/auth data is
   deliberately never cached by the service worker, so you never see stale
   prices.
+- **News:** Yahoo Finance's keyless search endpoint (`src/lib/market/news.ts`),
+  used both for a stock's own news and (broad query) general market news.
+- **Analyst target & company facts:** Nasdaq's public site API
+  (`src/lib/market/ratings.ts`) gives a consensus 1-year price target,
+  sector/industry, market cap, and dividend dates — free, but consensus-only;
+  no free source we found offers a per-analyst ratings breakdown.
+- **Event calendar:** Nasdaq's public earnings calendar
+  (`src/lib/market/calendar.ts`), queried per-day over a 30-day rolling
+  window (all callers share the same window so they hit the same cached
+  per-date requests) and filtered by symbol. Every card that depends on it
+  streams in via a Suspense boundary so a slow calendar fetch never blocks
+  the chart/price from rendering.
+- **Sentiment:** StockTwits' public per-symbol message stream
+  (`src/lib/market/sentiment.ts`), aggregating recent bullish/bearish tags.
+  The same function covers stock, sector (via the sector ETF's own stream),
+  and market (via SPY) sentiment — no separate aggregation logic needed.
+- **Performance comparison:** pure client-independent math
+  (`src/lib/market/comparison.ts`) over OHLCV already fetched for the chart,
+  the sector ETF, and SPY — no extra API calls beyond those two chart fetches.
 
 ## What's next
 
-Phase 2: news feed, sentiment, analyst ratings, the event calendar,
-stock-vs-market/sector comparison, custom alerts + push notifications, and
-persisted chart drawings.
+Phase 3: custom alerts + push notifications, auto-analysis (support/resistance,
+trend detection), persisted chart drawings, options-chain link-out.

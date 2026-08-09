@@ -1,9 +1,21 @@
+import { Suspense } from "react";
 import Link from "next/link";
-import { getChart, getQuoteSummary, SymbolNotFoundError } from "@/lib/market/yahoo";
-import { TIMEFRAMES, DEFAULT_TIMEFRAME_KEY, getTimeframe } from "@/lib/market/timeframes";
+import { getChart, getQuoteSummary, SymbolNotFoundError, type Candle } from "@/lib/market/yahoo";
+import { TIMEFRAMES, DEFAULT_TIMEFRAME_KEY, getTimeframe, type Timeframe } from "@/lib/market/timeframes";
+import { getCompanyFacts } from "@/lib/market/ratings";
+import { getNextEarnings } from "@/lib/market/calendar";
+import { getSentiment } from "@/lib/market/sentiment";
+import { getStockNews } from "@/lib/market/news";
+import { computePeriodReturn } from "@/lib/market/comparison";
+import { sectorNameToEtf } from "@/lib/market/symbols";
 import { changeColorClass, formatCompactNumber, formatPercent, formatPrice } from "@/lib/format";
 import StockChart from "@/components/StockChart";
 import StarButton from "@/components/StarButton";
+import PerformanceComparisonCard from "@/components/PerformanceComparisonCard";
+import CompanyFactsCard from "@/components/CompanyFactsCard";
+import SentimentCard from "@/components/SentimentCard";
+import UpcomingEarningsCard from "@/components/UpcomingEarningsCard";
+import NewsList from "@/components/NewsList";
 
 export default async function StockPage({
   params,
@@ -78,32 +90,142 @@ export default async function StockPage({
         <Stat label="Previous Close" value={formatPrice(quote.previousClose, quote.currency)} />
       </dl>
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1 overflow-x-auto">
-          {TIMEFRAMES.map((t) => (
-            <Link
-              key={t.key}
-              href={`/stock/${symbol}?tf=${t.key}`}
-              className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${
-                t.key === timeframe.key
-                  ? "bg-emerald-600/10 text-emerald-600 dark:bg-emerald-600/20 dark:text-emerald-400"
-                  : "text-slate-500 hover:text-slate-800 dark:text-slate-500 dark:hover:text-slate-300"
-              }`}
-            >
-              {t.label}
-            </Link>
-          ))}
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex gap-1 overflow-x-auto">
+              {TIMEFRAMES.map((t) => (
+                <Link
+                  key={t.key}
+                  href={`/stock/${symbol}?tf=${t.key}`}
+                  className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${
+                    t.key === timeframe.key
+                      ? "bg-emerald-600/10 text-emerald-600 dark:bg-emerald-600/20 dark:text-emerald-400"
+                      : "text-slate-500 hover:text-slate-800 dark:text-slate-500 dark:hover:text-slate-300"
+                  }`}
+                >
+                  {t.label}
+                </Link>
+              ))}
+            </div>
+            <div className="hidden gap-3 text-xs text-slate-500 sm:flex">
+              <Legend color="#38bdf8" label="MA20" />
+              <Legend color="#a78bfa" label="MA50" />
+              <Legend color="#f59e0b" label="MA200" />
+            </div>
+          </div>
+
+          <div className="mt-3 h-[380px] rounded-xl border border-slate-200 bg-white p-2 sm:h-[460px] lg:h-[560px] dark:border-slate-800 dark:bg-slate-900">
+            <StockChart candles={candles} intraday={timeframe.intraday} />
+          </div>
         </div>
-        <div className="hidden gap-3 text-xs text-slate-500 sm:flex">
-          <Legend color="#38bdf8" label="MA20" />
-          <Legend color="#a78bfa" label="MA50" />
-          <Legend color="#f59e0b" label="MA200" />
+
+        <div className="space-y-4">
+          <Suspense fallback={<CardSkeleton />}>
+            <ComparisonSection symbol={symbol} timeframe={timeframe} candles={candles} />
+          </Suspense>
+          <Suspense fallback={<CardSkeleton />}>
+            <CompanyFactsSection symbol={symbol} currentPrice={quote.regularMarketPrice} currency={quote.currency} />
+          </Suspense>
+          <Suspense fallback={<CardSkeleton />}>
+            <SentimentSection symbol={symbol} />
+          </Suspense>
+          <Suspense fallback={<CardSkeleton />}>
+            <NextEarningsSection symbol={symbol} />
+          </Suspense>
         </div>
       </div>
 
-      <div className="mt-3 h-[380px] rounded-xl border border-slate-200 bg-white p-2 sm:h-[460px] lg:h-[560px] dark:border-slate-800 dark:bg-slate-900">
-        <StockChart candles={candles} intraday={timeframe.intraday} />
-      </div>
+      <section className="mt-8">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">News</h2>
+        <Suspense fallback={<NewsSkeleton />}>
+          <NewsSection symbol={symbol} />
+        </Suspense>
+      </section>
+    </div>
+  );
+}
+
+// Each of these fetches independently and streams into its own Suspense
+// boundary, so a slow or unavailable free data source (the earnings
+// calendar in particular can mean dozens of upstream requests) never blocks
+// the core price/chart from rendering.
+
+async function ComparisonSection({
+  symbol,
+  timeframe,
+  candles,
+}: {
+  symbol: string;
+  timeframe: Timeframe;
+  candles: Candle[];
+}) {
+  const companyFacts = await getCompanyFacts(symbol).catch(() => null);
+  const sectorEtf = sectorNameToEtf(companyFacts?.sector);
+  const [marketChart, sectorChart] = await Promise.all([
+    getChart("SPY", timeframe.range, timeframe.interval).catch(() => null),
+    sectorEtf
+      ? getChart(sectorEtf.symbol, timeframe.range, timeframe.interval).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+
+  const stockReturn = computePeriodReturn(candles, symbol, symbol);
+  const marketReturn = marketChart
+    ? computePeriodReturn(marketChart.candles, "SPY", "S&P 500 (SPY)")
+    : { symbol: "SPY", name: "S&P 500 (SPY)", returnPercent: null };
+  const sectorReturn =
+    sectorChart && sectorEtf ? computePeriodReturn(sectorChart.candles, sectorEtf.symbol, sectorEtf.name) : null;
+
+  return <PerformanceComparisonCard stock={stockReturn} market={marketReturn} sector={sectorReturn} />;
+}
+
+async function CompanyFactsSection({
+  symbol,
+  currentPrice,
+  currency,
+}: {
+  symbol: string;
+  currentPrice: number | null;
+  currency: string;
+}) {
+  const facts = await getCompanyFacts(symbol).catch(() => null);
+  if (!facts) return null;
+  return <CompanyFactsCard facts={facts} currentPrice={currentPrice} currency={currency} />;
+}
+
+async function SentimentSection({ symbol }: { symbol: string }) {
+  const companyFacts = await getCompanyFacts(symbol).catch(() => null);
+  const sectorEtf = sectorNameToEtf(companyFacts?.sector);
+  const [stock, sector, market] = await Promise.all([
+    getSentiment(symbol).catch(() => null),
+    sectorEtf ? getSentiment(sectorEtf.symbol).catch(() => null) : Promise.resolve(null),
+    getSentiment("SPY").catch(() => null),
+  ]);
+  return <SentimentCard stock={stock} sector={sector} market={market} />;
+}
+
+async function NextEarningsSection({ symbol }: { symbol: string }) {
+  const event = await getNextEarnings(symbol).catch(() => null);
+  return <UpcomingEarningsCard event={event} />;
+}
+
+async function NewsSection({ symbol }: { symbol: string }) {
+  const news = await getStockNews(symbol).catch(() => []);
+  return <NewsList items={news} />;
+}
+
+function CardSkeleton() {
+  return (
+    <div className="h-32 animate-pulse rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-900/60" />
+  );
+}
+
+function NewsSkeleton() {
+  return (
+    <div className="space-y-2">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="h-16 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-900/60" />
+      ))}
     </div>
   );
 }

@@ -1,15 +1,10 @@
 import type { SymbolInfo } from "./symbols";
+import { BROWSER_HEADERS } from "./http";
 
 // Unofficial, keyless Yahoo Finance endpoints. No auth required for chart data,
 // but Yahoo does rate-limit and occasionally blocks default fetch user agents,
 // so we spoof a browser UA and fall back across their two query hosts.
 const YAHOO_HOSTS = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"];
-
-const BROWSER_HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-  Accept: "application/json",
-};
 
 export interface Candle {
   time: number; // unix seconds
