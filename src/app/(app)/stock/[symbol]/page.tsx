@@ -158,17 +158,21 @@ export default async function StockPage({
         </div>
 
         <div className="space-y-4 lg:col-start-3 lg:row-start-1 lg:row-span-2">
-          <PriceAnalysisCard analysis={analysis} currency={quote.currency} />
-          <Suspense fallback={null}>
-            <DeepDiveSection
-              symbol={symbol}
-              timeframe={timeframe}
-              candles={candles}
-              analysis={analysis}
-              currentPrice={quote.regularMarketPrice}
-              currency={quote.currency}
-            />
-          </Suspense>
+          <PriceAnalysisCard
+            analysis={analysis}
+            currency={quote.currency}
+            deepDive={
+              <Suspense fallback={null}>
+                <DeepDiveSection
+                  symbol={symbol}
+                  candles={candles}
+                  analysis={analysis}
+                  currentPrice={quote.regularMarketPrice}
+                  currency={quote.currency}
+                />
+              </Suspense>
+            }
+          />
           <AlertsPanel symbol={symbol} currentPrice={quote.regularMarketPrice} />
           <Suspense fallback={<CardSkeleton />}>
             <ComparisonSection symbol={symbol} timeframe={timeframe} candles={candles} />
@@ -292,58 +296,39 @@ async function SentimentSection({ symbol }: { symbol: string }) {
 // observations behind an optional "see more" -- see buildDeepDivePoints.
 async function DeepDiveSection({
   symbol,
-  timeframe,
   candles,
   analysis,
   currentPrice,
   currency,
 }: {
   symbol: string;
-  timeframe: Timeframe;
   candles: Candle[];
   analysis: PriceAnalysis;
   currentPrice: number | null;
   currency: string;
 }) {
-  const companyFacts = await getCompanyFacts(symbol).catch(() => null);
-  const sectorEtf = sectorNameToEtf(companyFacts?.sector);
-
-  const [marketChart, sectorChart, stockSentiment, marketSentiment, news, dailyChart] = await Promise.all([
-    getChart("SPY", timeframe.range, timeframe.interval).catch(() => null),
-    sectorEtf
-      ? getChart(sectorEtf.symbol, timeframe.range, timeframe.interval).catch(() => null)
-      : Promise.resolve(null),
+  const [stockSentiment, marketSentiment, dailyChart] = await Promise.all([
     getSentiment(symbol).catch(() => null),
     getSentiment("SPY").catch(() => null),
-    getStockNews(symbol).catch(() => []),
     getChart(symbol, "6mo", "1d").catch(() => null),
   ]);
 
-  const stockReturn = computePeriodReturn(candles, symbol, symbol);
-  const marketReturn = marketChart ? computePeriodReturn(marketChart.candles, "SPY", "S&P 500") : null;
-  const sectorReturn =
-    sectorChart && sectorEtf ? computePeriodReturn(sectorChart.candles, sectorEtf.symbol, sectorEtf.name) : null;
   const volatility = dailyChart ? computeHistoricalVolatility(dailyChart.candles) : null;
-
   const lastCandle = candles.at(-1) ?? null;
   const avgVolume20 = dailyChart ? (sma(dailyChart.candles.map((c) => c.volume), 20).at(-1) ?? null) : null;
 
   const points = buildDeepDivePoints({
-    analysis,
+    trend: analysis.trend,
     currentPrice,
     currency,
-    periodLabel: rangeLabel(timeframe.range),
-    stockReturn,
-    marketReturn,
-    sectorReturn,
+    nearestSupport: analysis.levels.filter((l) => l.type === "support").sort((a, b) => b.price - a.price)[0] ?? null,
+    nearestResistance:
+      analysis.levels.filter((l) => l.type === "resistance").sort((a, b) => a.price - b.price)[0] ?? null,
     volatility,
-    stockSentiment,
-    marketSentiment,
-    bullishNewsCount: news.filter((n) => n.tone === "bullish").length,
-    bearishNewsCount: news.filter((n) => n.tone === "bearish").length,
-    newsCount: news.length,
     latestVolume: lastCandle?.volume ?? null,
     avgVolume20,
+    stockSentiment,
+    marketSentiment,
   });
 
   return <DeepDiveCard points={points} />;

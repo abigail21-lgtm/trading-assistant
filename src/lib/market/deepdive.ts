@@ -1,106 +1,119 @@
-import type { PriceAnalysis } from "./analysis";
-import type { PeriodReturn } from "./comparison";
+import type { Trend, SupportResistanceLevel } from "./analysis";
 import type { VolatilityWindow } from "./volatility";
 import type { SentimentSummary } from "./sentiment";
-import { formatPercent, formatPrice } from "../format";
+import { formatPrice } from "../format";
 
 export interface DeepDiveInput {
-  analysis: PriceAnalysis;
+  trend: Trend;
   currentPrice: number | null;
   currency: string;
-  periodLabel: string;
-  stockReturn: PeriodReturn | null;
-  marketReturn: PeriodReturn | null;
-  sectorReturn: PeriodReturn | null;
+  nearestSupport: SupportResistanceLevel | null;
+  nearestResistance: SupportResistanceLevel | null;
   volatility: VolatilityWindow[] | null;
-  stockSentiment: SentimentSummary | null;
-  marketSentiment: SentimentSummary | null;
-  bullishNewsCount: number;
-  bearishNewsCount: number;
-  newsCount: number;
   latestVolume: number | null;
   avgVolume20: number | null;
+  stockSentiment: SentimentSummary | null;
+  marketSentiment: SentimentSummary | null;
 }
 
+const TREND_PHRASE: Record<Trend, string> = {
+  uptrend: "trending up",
+  downtrend: "trending down",
+  range: "range-bound",
+};
+
 /**
- * Synthesizes a handful of plain-language observations from data already
- * computed elsewhere on the page (trend/levels, comparison returns,
- * volatility, sentiment, news tone) into one combined list -- not a new
- * analysis, just points from the chart and articles gathered in one place,
- * for an optional "see more" rather than cluttering the main card. Purely
- * descriptive of what's already true in the data, never a recommendation.
+ * Everything here is already visible elsewhere on the page as a raw number
+ * (volatility %, volume, sentiment %, S/R price) -- restating any one of
+ * them alone adds nothing. The point of this section is to connect two or
+ * three of those numbers into a reading that isn't obvious from glancing at
+ * each card individually: a divergence, a confirmation, or a setup. When
+ * nothing meaningfully connects, say so rather than manufacturing filler.
  */
 export function buildDeepDivePoints(input: DeepDiveInput): string[] {
   const points: string[] = [];
 
-  if (input.currentPrice != null) {
-    const nearestSupport = input.analysis.levels
-      .filter((l) => l.type === "support")
-      .sort((a, b) => b.price - a.price)[0];
-    const nearestResistance = input.analysis.levels
-      .filter((l) => l.type === "resistance")
-      .sort((a, b) => a.price - b.price)[0];
-    if (nearestSupport && nearestResistance) {
-      const toSupport = ((input.currentPrice - nearestSupport.price) / input.currentPrice) * 100;
-      const toResistance = ((nearestResistance.price - input.currentPrice) / input.currentPrice) * 100;
-      points.push(
-        `Price sits ${toSupport.toFixed(1)}% above its nearest support (${formatPrice(nearestSupport.price, input.currency)}) and ${toResistance.toFixed(1)}% below its nearest resistance (${formatPrice(nearestResistance.price, input.currency)}).`,
-      );
-    }
-  }
-
-  if (input.latestVolume != null && input.avgVolume20 != null && input.avgVolume20 > 0) {
-    const diffPercent = ((input.latestVolume - input.avgVolume20) / input.avgVolume20) * 100;
-    if (Math.abs(diffPercent) >= 15) {
-      points.push(
-        `Latest volume is ${Math.abs(diffPercent).toFixed(0)}% ${diffPercent > 0 ? "above" : "below"} its 20-period average.`,
-      );
-    } else {
-      points.push("Volume is in line with its recent 20-period average — no unusual activity.");
-    }
-  }
-
+  // Volatility direction + trend: is the current move (or lack of one)
+  // speeding up or settling down?
   const vol20 = input.volatility?.find((v) => v.days === 20)?.annualizedPercent ?? null;
   const vol60 = input.volatility?.find((v) => v.days === 60)?.annualizedPercent ?? null;
   if (vol20 != null && vol60 != null) {
-    const direction = vol20 > vol60 * 1.1 ? "picked up" : vol20 < vol60 * 0.9 ? "cooled off" : "held steady";
-    points.push(
-      `Realized volatility has ${direction} recently — ${vol20.toFixed(0)}% (20-day) vs ${vol60.toFixed(0)}% (60-day), annualized.`,
-    );
-  }
-
-  if (input.stockReturn?.returnPercent != null) {
-    const parts = [`${input.stockReturn.symbol} is ${formatPercent(input.stockReturn.returnPercent)} over ${input.periodLabel}`];
-    if (input.marketReturn?.returnPercent != null) {
-      const delta = input.stockReturn.returnPercent - input.marketReturn.returnPercent;
-      parts.push(
-        `${delta >= 0 ? "outperforming" : "underperforming"} the market (${formatPercent(input.marketReturn.returnPercent)}) by ${Math.abs(delta).toFixed(1)} points`,
+    const rising = vol20 > vol60 * 1.1;
+    const falling = vol20 < vol60 * 0.9;
+    if (rising || falling) {
+      let read: string;
+      if (input.trend === "range" && rising) {
+        read = "often a squeeze building toward a bigger move in either direction";
+      } else if (input.trend === "range" && falling) {
+        read = "consolidation settling down rather than building toward a breakout";
+      } else if (rising) {
+        read = "the move looks like it's accelerating, not just continuing";
+      } else {
+        read = "the trend is holding without picking up steam";
+      }
+      points.push(
+        `Volatility has ${rising ? "picked up" : "cooled off"} recently (${vol20.toFixed(0)}% 20-day vs ${vol60.toFixed(0)}% 60-day, annualized) while the stock is ${TREND_PHRASE[input.trend]} — ${read}.`,
       );
     }
-    if (input.sectorReturn?.returnPercent != null) {
-      const delta = input.stockReturn.returnPercent - input.sectorReturn.returnPercent;
-      parts.push(
-        `${delta >= 0 ? "ahead of" : "behind"} its sector (${formatPercent(input.sectorReturn.returnPercent)}) by ${Math.abs(delta).toFixed(1)} points`,
+  }
+
+  // S/R proximity + volume: is price actually testing a level, and does
+  // volume back that up or call it into question?
+  if (input.currentPrice != null && (input.nearestSupport || input.nearestResistance)) {
+    const distances = [
+      input.nearestResistance && {
+        level: input.nearestResistance,
+        percent: ((input.nearestResistance.price - input.currentPrice) / input.currentPrice) * 100,
+      },
+      input.nearestSupport && {
+        level: input.nearestSupport,
+        percent: ((input.currentPrice - input.nearestSupport.price) / input.currentPrice) * 100,
+      },
+    ].filter((d): d is { level: SupportResistanceLevel; percent: number } => !!d && d.percent >= 0);
+    const nearest = distances.sort((a, b) => a.percent - b.percent)[0];
+
+    if (nearest && nearest.percent <= 3 && input.latestVolume != null && input.avgVolume20 != null && input.avgVolume20 > 0) {
+      const volumeDiff = ((input.latestVolume - input.avgVolume20) / input.avgVolume20) * 100;
+      if (Math.abs(volumeDiff) >= 15) {
+        const levelWord = nearest.level.type === "resistance" ? "resistance" : "support";
+        const volumeWord = volumeDiff > 0 ? "above-average" : "below-average";
+        const read =
+          volumeDiff > 0
+            ? "a test on above-average volume carries more conviction than a quiet one"
+            : "light volume here means a break either way would carry less conviction";
+        points.push(
+          `Price is within ${nearest.percent.toFixed(1)}% of ${levelWord} (${formatPrice(nearest.level.price, input.currency)}) on ${volumeWord} volume — ${read}.`,
+        );
+      }
+    }
+  }
+
+  // Sentiment vs the market: does trader mood here diverge meaningfully
+  // from the broader market's, independent of price action?
+  if (
+    input.stockSentiment &&
+    input.stockSentiment.label !== "Unknown" &&
+    input.stockSentiment.bullishPercent != null &&
+    input.marketSentiment &&
+    input.marketSentiment.label !== "Unknown" &&
+    input.marketSentiment.bullishPercent != null
+  ) {
+    const delta = input.stockSentiment.bullishPercent - input.marketSentiment.bullishPercent;
+    if (Math.abs(delta) >= 15) {
+      const direction = delta > 0 ? "more bullish" : "more bearish";
+      const context =
+        input.trend === "range"
+          ? "even while the price itself hasn't broken out either way"
+          : `while price is ${TREND_PHRASE[input.trend]}`;
+      points.push(
+        `Traders here run ${direction} (${input.stockSentiment.bullishPercent.toFixed(0)}% vs ${input.marketSentiment.bullishPercent.toFixed(0)}% bullish market-wide) ${context}.`,
       );
     }
-    points.push(`${parts.join(", ")}.`);
   }
 
-  if (input.stockSentiment && input.stockSentiment.label !== "Unknown" && input.stockSentiment.bullishPercent != null) {
-    let sentence = `StockTwits sentiment for this stock runs ${input.stockSentiment.bullishPercent.toFixed(0)}% bullish across ${input.stockSentiment.taggedTotal} tagged messages`;
-    if (
-      input.marketSentiment &&
-      input.marketSentiment.label !== "Unknown" &&
-      input.marketSentiment.bullishPercent != null
-    ) {
-      sentence += `, versus ${input.marketSentiment.bullishPercent.toFixed(0)}% for the broader market`;
-    }
-    points.push(`${sentence}.`);
-  }
-
-  if (input.newsCount > 0 && (input.bullishNewsCount > 0 || input.bearishNewsCount > 0)) {
+  if (points.length === 0) {
     points.push(
-      `Of the ${input.newsCount} most recent headlines, ${input.bullishNewsCount} read bullish and ${input.bearishNewsCount} read bearish by keyword — a rough tone read, not real analysis.`,
+      "Nothing stands out right now — volatility, volume near key levels, and sentiment vs the market all look broadly ordinary.",
     );
   }
 

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { PriceAnalysis } from "@/lib/market/analysis";
 import { formatPrice } from "@/lib/format";
 
@@ -16,9 +17,11 @@ const TREND_LABELS: Record<PriceAnalysis["trend"], string> = {
 export default function PriceAnalysisCard({
   analysis,
   currency,
+  deepDive,
 }: {
   analysis: PriceAnalysis;
   currency: string;
+  deepDive?: ReactNode;
 }) {
   if (!analysis.hasEnoughHistory) {
     return (
@@ -69,13 +72,11 @@ export default function PriceAnalysisCard({
                 ))}
             </div>
           </div>
-          <p className="mt-2 text-[11px] text-slate-400">
-            Support: price levels below where the stock has repeatedly stopped falling and bounced
-            back up. Resistance: price levels above where it has repeatedly stopped rising and
-            pulled back. Drawn from past price history — not a guarantee either will hold next time.
-          </p>
+          <p className="mt-2 text-[11px] text-slate-400">Nearest 2 levels on each side of the current price.</p>
         </div>
       )}
+
+      {deepDive}
 
       <p className="mt-3 text-[10px] text-slate-400">
         Automated read from recent price action — not investment advice.
