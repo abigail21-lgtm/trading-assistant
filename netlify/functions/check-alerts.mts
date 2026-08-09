@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getChart } from "../../src/lib/market/yahoo";
 import {
   ALERT_COOLDOWN_MS,
+  alertTierLabel,
   buildAlertContext,
   evaluateAlert,
   notificationMessage,
@@ -87,7 +88,8 @@ const checkAlerts = async () => {
     const ctx = buildAlertContext(chart.candles);
     if (!ctx) continue;
     checkedCount++;
-    if (!evaluateAlert(row.rule, ctx)) continue;
+    const evaluation = evaluateAlert(row.rule, ctx);
+    if (evaluation.tier === "none") continue;
 
     const { data: subs } = await supabase
       .from("push_subscriptions")
@@ -96,8 +98,8 @@ const checkAlerts = async () => {
       .returns<PushSubscriptionRow[]>();
 
     const payload = JSON.stringify({
-      title: `${row.symbol} alert triggered`,
-      body: notificationMessage(row.rule, ctx),
+      title: `${row.symbol}: ${alertTierLabel(evaluation.tier)}`,
+      body: notificationMessage(row.rule, ctx, evaluation),
       tag: row.rule.id,
       url: `/stock/${row.symbol}`,
     });

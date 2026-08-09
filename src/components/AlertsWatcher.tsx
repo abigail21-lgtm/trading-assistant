@@ -2,7 +2,13 @@
 
 import { useEffect, useRef } from "react";
 import type { AlertRule } from "@/lib/market/alerts";
-import { ALERT_COOLDOWN_MS, buildAlertContext, evaluateAlert, notificationMessage } from "@/lib/market/alerts";
+import {
+  ALERT_COOLDOWN_MS,
+  alertTierLabel,
+  buildAlertContext,
+  evaluateAlert,
+  notificationMessage,
+} from "@/lib/market/alerts";
 import { getAlerts, markAlertFired } from "@/lib/alerts-client";
 import { getNotificationPermission, showNotification } from "@/lib/notifications";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -50,9 +56,10 @@ export default function AlertsWatcher() {
             if (!ctx) continue;
 
             for (const rule of due) {
-              if (!evaluateAlert(rule, ctx)) continue;
-              showNotification(`${symbol} alert triggered`, {
-                body: notificationMessage(rule, ctx),
+              const evaluation = evaluateAlert(rule, ctx);
+              if (evaluation.tier === "none") continue;
+              showNotification(`${symbol}: ${alertTierLabel(evaluation.tier)}`, {
+                body: notificationMessage(rule, ctx, evaluation),
                 tag: rule.id,
               });
               await markAlertFired(rule.id, now);

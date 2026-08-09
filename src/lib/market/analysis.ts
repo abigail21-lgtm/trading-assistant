@@ -141,6 +141,20 @@ function detectSignal(candles: Candle[], levels: SupportResistanceLevel[]): stri
   return null;
 }
 
+/**
+ * Every clustered support/resistance level across the full history, not
+ * filtered down to the handful nearest the current price. Alert evaluation
+ * needs this unfiltered form -- `analyzePriceAction`'s `levels` only ever
+ * contains resistance *above* and support *below* the current price (that's
+ * what makes them useful to display), which means a level a price has just
+ * broken through immediately drops out of that list -- exactly the moment a
+ * "breaks resistance" alert needs to catch.
+ */
+export function findKeyLevels(candles: Candle[]): SupportResistanceLevel[] {
+  if (candles.length < 25) return [];
+  return clusterPivots(findPivots(candles, 3), 1.5);
+}
+
 export function analyzePriceAction(candles: Candle[]): PriceAnalysis {
   if (candles.length < 25) {
     return {
@@ -155,8 +169,7 @@ export function analyzePriceAction(candles: Candle[]): PriceAnalysis {
   const closes = candles.map((c) => c.close);
   const { trend, summary } = classifyTrend(closes);
 
-  const pivots = findPivots(candles, 3);
-  const allLevels = clusterPivots(pivots, 1.5);
+  const allLevels = findKeyLevels(candles);
   const price = closes.at(-1)!;
 
   // Keep only the levels nearest to the current price — most actionable.

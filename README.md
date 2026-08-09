@@ -73,8 +73,9 @@ will silently fall back to local mode, and nobody will be able to sign in.
 
 ## Push notifications (optional, needs Supabase + a deployment)
 
-Alerts (price target / moving-average cross / volume spike) can notify you
-two ways:
+Alerts (price target, moving-average cross with a custom period, volume
+spike, or a support/resistance break — one condition or several combined,
+see below) can notify you two ways:
 
 - **In-app** (works in both local and Supabase mode): checked every 5
   minutes while the app is open, via a browser Notification. This is the
@@ -176,9 +177,12 @@ push notification should arrive even with the tab closed.
   levels (clustering local pivot highs/lows) purely from OHLCV already on the
   page — no extra API calls, and it flags bounce-off-support /
   rejected-at-resistance signals.
-- **Alerts:** price-target, moving-average-cross, and volume-spike rules
-  (`src/lib/market/alerts.ts`), stored via `src/lib/alerts-client.ts` (same
-  local/Supabase pattern as the watchlist), checked one of two ways
+- **Alerts:** price-target, moving-average-cross (any custom period, not
+  just 20/50/200), volume-spike, and support/resistance-break rules
+  (`src/lib/market/alerts.ts`), each combinable into a single multi-condition
+  alert that fires "Look now" when every condition is true at once, or
+  "Worth attention" when only some are. Stored via `src/lib/alerts-client.ts`
+  (same local/Supabase pattern as the watchlist), checked one of two ways
   depending on mode — see "Push notifications" above:
   - **Local mode:** in-app only. `src/components/AlertsWatcher.tsx` polls
     every 5 minutes while the app is open and fires a browser Notification;
