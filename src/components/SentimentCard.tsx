@@ -25,10 +25,12 @@ export function SentimentBadge({ label, sentiment }: { label: string; sentiment:
 }
 
 export default function SentimentCard({
+  symbol,
   stock,
   sector,
   market,
 }: {
+  symbol: string;
   stock: SentimentSummary | null;
   sector: SentimentSummary | null;
   market: SentimentSummary | null;
@@ -38,12 +40,18 @@ export default function SentimentCard({
 
   return (
     <CollapsibleCardShell
-      title="Sentiment"
+      title={`${symbol} Sentiment`}
       open={open}
       onToggle={() => setOpen((v) => !v)}
-      summary={<span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${LABEL_STYLES[value]}`}>{value}</span>}
+      summary={
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${LABEL_STYLES[value]}`}>
+          {symbol}: {value}
+        </span>
+      }
     >
-      <p className="mb-2 text-[11px] text-slate-400">From recent StockTwits activity</p>
+      <p className="mb-2 text-[11px] text-slate-400">
+        From recent StockTwits activity — this stock&apos;s own sentiment, separate from the market/sector rows below.
+      </p>
       <div className="space-y-2">
         <SentimentBadge label="This stock" sentiment={stock} />
         <SentimentBadge label="Sector" sentiment={sector} />

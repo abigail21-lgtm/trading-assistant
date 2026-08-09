@@ -51,7 +51,10 @@ const PALETTES = {
     volDown: "#ef444466",
     drawLine: "#f472b6",
     support: "#34d399",
-    resistance: "#fb923c",
+    // Was #fb923c (orange), too close to MA200's amber (#f59e0b) at a
+    // glance -- rose is a clearly different hue while staying in the same
+    // "warning/ceiling" semantic space.
+    resistance: "#fb7185",
   },
   light: {
     text: "#64748b",
@@ -63,7 +66,7 @@ const PALETTES = {
     volDown: "#dc262655",
     drawLine: "#db2777",
     support: "#059669",
-    resistance: "#ea580c",
+    resistance: "#e11d48",
   },
 } as const;
 
@@ -87,10 +90,24 @@ export default function StockChart({
   const [drawMode, setDrawMode] = useState(false);
   const [hasPendingPoint, setHasPendingPoint] = useState(false);
   const drawModeRef = useRef(false);
-  const pendingPointRef = useRef<{ time: Time; price: number } | null>(null);
+  const pendingPointRef = useRef<{ time: Time; price: number; capturedAtMs: number } | null>(null);
 
   const [visibleMAs, setVisibleMAs] = useState<Set<number>>(new Set([20, 50, 200]));
   const [showLevels, setShowLevels] = useState(true);
+
+  // A page restored from the browser's back/forward cache (bfcache) resumes
+  // its JS exactly where it left off -- no effects re-run -- but the
+  // canvas this chart is drawn on can still lose its actual pixel content
+  // on restore. Detect that specific case and force the chart-creation
+  // effect below to tear down and repaint from the data already in memory.
+  const [bfcacheRebuildKey, setBfcacheRebuildKey] = useState(0);
+  useEffect(() => {
+    function handlePageShow(event: PageTransitionEvent) {
+      if (event.persisted) setBfcacheRebuildKey((k) => k + 1);
+    }
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -205,6 +222,12 @@ export default function StockChart({
     }
 
     for (const line of drawings) {
+      // Defensively skip any already-saved degenerate line (identical
+      // start/end time, e.g. from a pre-fix mobile double-tap) --
+      // lightweight-charts doesn't handle duplicate time values on a line
+      // series cleanly, and this data may already exist in storage from
+      // before the click-handler guard above was added.
+      if (line.time1 === line.time2) continue;
       const delta = lineDeltaPercent(line);
       const lineSeries = chart.addSeries(LineSeries, {
         color: palette.drawLine,
@@ -245,12 +268,25 @@ export default function StockChart({
       if (price == null) return;
 
       if (!pendingPointRef.current) {
-        pendingPointRef.current = { time: param.time, price };
+        pendingPointRef.current = { time: param.time, price, capturedAtMs: Date.now() };
         setHasPendingPoint(true);
         return;
       }
 
       const start = pendingPointRef.current;
+
+      // Guards against a single tap on mobile firing this handler twice in
+      // a row (touch + synthetic click, or a double-tap-to-zoom gesture).
+      // Without this, the "second" point can land on the same candle or
+      // within milliseconds of the first, producing a degenerate
+      // near-zero-length line -- lightweight-charts doesn't handle
+      // duplicate/non-increasing time values on a line series cleanly,
+      // which was making the whole chart disappear rather than just
+      // drawing a bad line.
+      const tooSoon = Date.now() - start.capturedAtMs < 350;
+      const samePoint = start.time === param.time;
+      if (tooSoon || samePoint) return;
+
       pendingPointRef.current = null;
       setHasPendingPoint(false);
       drawModeRef.current = false;
@@ -278,7 +314,7 @@ export default function StockChart({
       for (const line of priceLines) candleSeries.removePriceLine(line);
       chart.remove();
     };
-  }, [candles, intraday, theme, drawings, symbol, timeframeKey, visibleMAs, levels, showLevels]);
+  }, [candles, intraday, theme, drawings, symbol, timeframeKey, visibleMAs, levels, showLevels, bfcacheRebuildKey]);
 
   if (candles.length === 0) {
     return (

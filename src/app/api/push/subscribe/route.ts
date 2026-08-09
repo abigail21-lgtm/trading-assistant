@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
+// Per-user data -- see src/app/api/watchlist/route.ts for why this is explicit.
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
 const NOT_CONFIGURED = NextResponse.json(
   { error: "Push notifications require Supabase to be configured." },
   { status: 501 },

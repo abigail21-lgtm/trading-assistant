@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import type { QuoteResult } from "@/lib/market/yahoo";
 import { getWatchlist } from "@/lib/watchlist-client";
+import { useRefetchOnFocus } from "@/lib/useRefetchOnFocus";
 import WatchlistRow from "./WatchlistRow";
 
 export default function WatchlistSection() {
@@ -20,13 +21,7 @@ export default function WatchlistSection() {
     setQuotes(data.quotes ?? []);
   }, []);
 
-  useEffect(() => {
-    // Standard fetch-on-mount effect (React's own docs use this exact
-    // shape); the set-state-in-effect rule can't see that `load`'s setState
-    // calls only run after an await, not synchronously in this effect body.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    load();
-  }, [load]);
+  useRefetchOnFocus(load);
 
   if (quotes === null) {
     return (

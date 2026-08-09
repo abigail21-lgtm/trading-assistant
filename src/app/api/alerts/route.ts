@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+
+// Per-user data -- see src/app/api/watchlist/route.ts for why this is explicit.
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 import type { AlertRule } from "@/lib/market/alerts";
 
 const NOT_CONFIGURED = NextResponse.json(

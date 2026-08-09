@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
+// Per-user data -- must never be cached by any layer (browser, CDN, service
+// worker). Explicit rather than relying on Next's cookie-usage auto-detection,
+// since that's a framework heuristic an edge/CDN layer might not honor.
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
 const NOT_CONFIGURED = NextResponse.json(
   { error: "Supabase is not configured; the client should use local storage instead." },
   { status: 501 },

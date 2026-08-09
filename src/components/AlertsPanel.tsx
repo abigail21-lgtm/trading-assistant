@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import type { AlertRule } from "@/lib/market/alerts";
 import { describeAlert } from "@/lib/market/alerts";
 import { getAlerts, removeAlert } from "@/lib/alerts-client";
 import { formatRelativeTime } from "@/lib/format";
+import { useRefetchOnFocus } from "@/lib/useRefetchOnFocus";
 import AlertBuilder from "./AlertBuilder";
 import NotificationPermissionToggle from "./NotificationPermissionToggle";
 
@@ -17,13 +18,7 @@ export default function AlertsPanel({ symbol, currentPrice }: { symbol: string; 
     setAlerts(all.filter((a) => a.symbol === symbol));
   }, [symbol]);
 
-  useEffect(() => {
-    // Standard fetch-on-mount effect; the set-state-in-effect rule can't see
-    // that load()'s setState call only runs after an await, not
-    // synchronously in this effect body.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    load();
-  }, [load]);
+  useRefetchOnFocus(load);
 
   async function handleRemove(id: string) {
     await removeAlert(id);

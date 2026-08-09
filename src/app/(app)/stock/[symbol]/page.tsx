@@ -270,7 +270,7 @@ async function SentimentSection({ symbol }: { symbol: string }) {
     sectorEtf ? getSentiment(sectorEtf.symbol).catch(() => null) : Promise.resolve(null),
     getSentiment("SPY").catch(() => null),
   ]);
-  return <SentimentCard stock={stock} sector={sector} market={market} />;
+  return <SentimentCard symbol={symbol} stock={stock} sector={sector} market={market} />;
 }
 
 async function NextEarningsSection({ symbol }: { symbol: string }) {

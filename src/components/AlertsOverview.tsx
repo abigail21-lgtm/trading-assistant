@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import type { AlertRule } from "@/lib/market/alerts";
 import { describeAlert } from "@/lib/market/alerts";
 import { getAlerts, removeAlert } from "@/lib/alerts-client";
+import { useRefetchOnFocus } from "@/lib/useRefetchOnFocus";
 
 export default function AlertsOverview() {
   const [alerts, setAlerts] = useState<AlertRule[] | null>(null);
@@ -13,13 +14,7 @@ export default function AlertsOverview() {
     setAlerts(await getAlerts());
   }, []);
 
-  useEffect(() => {
-    // Standard fetch-on-mount effect; the set-state-in-effect rule can't see
-    // that load()'s setState call only runs after an await, not
-    // synchronously in this effect body.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    load();
-  }, [load]);
+  useRefetchOnFocus(load);
 
   if (!alerts || alerts.length === 0) return null;
 
