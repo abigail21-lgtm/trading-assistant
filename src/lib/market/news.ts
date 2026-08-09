@@ -20,8 +20,9 @@ export interface NewsItem {
 // enough to flag "probably worth a look" at a glance, not to trust blindly.
 const BULLISH_WORDS = [
   "upgrade", "upgraded", "beats", "beat", "raises", "raised", "surge", "surges", "soar", "soars",
-  "jumps", "rally", "rallies", "outperform", "record high", "all-time high", "bullish", "tops",
-  "gains", "gain", "climb", "climbs", "buy rating", "strong buy", "profit rise", "wins",
+  "jumps", "rally", "rallies", "outperform", "record high", "all-time high", "bullish", "bulls",
+  "bull market", "tops", "gains", "gain", "climb", "climbs", "buy rating", "strong buy",
+  "profit rise", "wins",
 ];
 const BEARISH_WORDS = [
   "downgrade", "downgraded", "misses", "miss", "cuts", "cut", "plunge", "plunges", "slump",
@@ -66,7 +67,13 @@ async function fetchNewsSummaries(symbols: string, revalidateSeconds: number): P
   const map = new Map<string, string>();
   try {
     const url = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(symbols)}&region=US&lang=en-US`;
-    const res = await fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: revalidateSeconds } });
+    // Summaries are enrichment, not essential -- bound how long a slow
+    // response can hold things up rather than letting it stall the page.
+    const res = await fetch(url, {
+      headers: BROWSER_HEADERS,
+      next: { revalidate: revalidateSeconds },
+      signal: AbortSignal.timeout(6000),
+    });
     if (!res.ok) return map;
     const xml = await res.text();
 

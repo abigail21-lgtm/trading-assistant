@@ -6,10 +6,9 @@ import { formatRelativeTime } from "@/lib/format";
 
 const DEFAULT_VISIBLE = 3;
 
-const TONE_DOT: Record<HeadlineTone, string> = {
-  bullish: "bg-emerald-500",
-  bearish: "bg-red-500",
-  neutral: "bg-slate-300 dark:bg-slate-700",
+const TONE_BADGE: Record<Exclude<HeadlineTone, "neutral">, string> = {
+  bullish: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
+  bearish: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400",
 };
 
 export default function NewsList({ items }: { items: NewsItem[] }) {
@@ -53,7 +52,6 @@ export default function NewsList({ items }: { items: NewsItem[] }) {
               rel="noopener noreferrer"
               className="flex items-start gap-3 rounded-lg px-2 py-2 transition hover:bg-slate-100 dark:hover:bg-slate-900"
             >
-              <span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${TONE_DOT[item.tone]}`} title={item.tone} />
               {item.thumbnail && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -63,9 +61,19 @@ export default function NewsList({ items }: { items: NewsItem[] }) {
                 />
               )}
               <div className="min-w-0">
-                <p className="line-clamp-2 text-sm font-medium text-slate-800 dark:text-slate-200">
-                  {item.title}
-                </p>
+                <div className="flex items-start gap-2">
+                  <p className="line-clamp-2 text-sm font-medium text-slate-800 dark:text-slate-200">
+                    {item.title}
+                  </p>
+                  {item.tone !== "neutral" && (
+                    <span
+                      className={`mt-0.5 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${TONE_BADGE[item.tone]}`}
+                      title="Keyword read of the headline, not real sentiment analysis"
+                    >
+                      {item.tone === "bullish" ? "Bullish" : "Bearish"}
+                    </span>
+                  )}
+                </div>
                 {item.summary && (
                   <p className="mt-0.5 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">{item.summary}</p>
                 )}
