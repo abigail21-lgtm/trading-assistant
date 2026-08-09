@@ -33,12 +33,15 @@ export default function SectorGrid({ sectors }: { sectors: QuoteWithTrendResult[
             className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
           >
             <p className="truncate text-xs font-medium text-slate-500 dark:text-slate-400">{sector.name}</p>
-            <p
-              className={`mt-0.5 text-sm font-semibold ${
-                sector.ok ? changeColorClass(sector.changePercent) : "text-slate-400 dark:text-slate-600"
-              }`}
-            >
-              {sector.ok ? formatPercent(sector.changePercent) : "—"}
+            <p className="mt-0.5 flex items-baseline gap-1">
+              <span className="text-[10px] font-normal text-slate-400 dark:text-slate-600">Today</span>
+              <span
+                className={`text-sm font-semibold ${
+                  sector.ok ? changeColorClass(sector.changePercent) : "text-slate-400 dark:text-slate-600"
+                }`}
+              >
+                {sector.ok ? formatPercent(sector.changePercent) : "—"}
+              </span>
             </p>
             {sector.ok && (
               <p className={`mt-0.5 text-[11px] ${changeColorClass(sector.oneMonthReturn)}`}>

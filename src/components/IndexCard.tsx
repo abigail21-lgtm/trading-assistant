@@ -17,8 +17,11 @@ export default function IndexCard({ quote }: { quote: QuoteWithTrendResult }) {
       <p className="mt-1 text-xl font-semibold text-slate-900 dark:text-slate-100">
         {formatPrice(quote.regularMarketPrice, quote.currency)}
       </p>
-      <p className={`mt-0.5 text-sm font-medium ${changeColorClass(quote.changePercent)}`}>
-        {formatPercent(quote.changePercent)}
+      <p className="mt-0.5 flex items-baseline gap-1">
+        <span className="text-[10px] font-normal text-slate-400 dark:text-slate-600">Today</span>
+        <span className={`text-sm font-medium ${changeColorClass(quote.changePercent)}`}>
+          {formatPercent(quote.changePercent)}
+        </span>
       </p>
 
       <div className="mt-2 grid grid-cols-3 gap-1 border-t border-slate-100 pt-2 text-[11px] dark:border-slate-800">
