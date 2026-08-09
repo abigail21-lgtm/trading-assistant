@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Trading Assistant",
+  title: "MarketDesk",
   description: "Quickly analyze a stock for trading: trends, chart, news, ratings, and alerts.",
   manifest: "/manifest.json",
   icons: {
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Trading Assistant",
+    title: "MarketDesk",
   },
 };
 

@@ -1,4 +1,4 @@
-# Trading Assistant
+# MarketDesk
 
 A PWA for quickly analyzing a stock for trading: market overview, sector
 trends, an interactive chart with candle sizes from 1-minute to monthly, and a

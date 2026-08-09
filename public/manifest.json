@@ -1,6 +1,6 @@
 {
-  "name": "Trading Assistant",
-  "short_name": "Trading",
+  "name": "MarketDesk",
+  "short_name": "MarketDesk",
   "description": "Quickly analyze a stock for trading: trends, chart, news, ratings, and alerts.",
   "start_url": "/",
   "scope": "/",

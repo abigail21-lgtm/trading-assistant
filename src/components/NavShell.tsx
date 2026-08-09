@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import ThemeToggle from "./ThemeToggle";
 import AlertsWatcher from "./AlertsWatcher";
+import Logo from "./Logo";
 
 const TABS = [
   { href: "/", label: "Home", icon: HomeIcon },
@@ -29,8 +30,8 @@ export default function NavShell({
     <div className="flex min-h-dvh flex-col">
       <AlertsWatcher />
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-8 dark:border-slate-800 dark:bg-slate-950/95">
-        <Link href="/" className="text-base font-semibold text-slate-900 dark:text-slate-100">
-          Trading Assistant
+        <Link href="/">
+          <Logo />
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">

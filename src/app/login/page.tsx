@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import Logo from "@/components/Logo";
 
 export default function LoginPage() {
   return (
@@ -47,7 +48,7 @@ function LoginForm() {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-white px-4 dark:bg-slate-950">
       <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900">
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Trading Assistant</h1>
+        <h1><Logo size="lg" /></h1>
 
         {!isSupabaseConfigured ? (
           <>

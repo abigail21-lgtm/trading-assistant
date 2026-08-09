@@ -1,6 +1,8 @@
-// Generates simple placeholder app icons (dark bg + green uptrend bars) as
-// real PNG files using only Node's built-in zlib — no image-library
-// dependency needed for a one-off asset generation script.
+// Generates the app icons (dark bg + emerald "Desk" mark: a monitor outline
+// with a trend line, on a stand) as real PNG files using only Node's built-in
+// zlib -- no image-library dependency needed for a one-off asset generation
+// script. Also wraps one of the PNGs in a minimal ICO container for the
+// static favicon.
 import { writeFileSync, mkdirSync } from "node:fs";
 import { deflateSync, crc32 } from "node:zlib";
 import { fileURLToPath } from "node:url";
@@ -11,7 +13,7 @@ const outDir = join(__dirname, "..", "public", "icons");
 mkdirSync(outDir, { recursive: true });
 
 const BG = [0x02, 0x06, 0x17]; // slate-950
-const BAR = [0x10, 0xb9, 0x81]; // emerald-500
+const MARK = [0x10, 0xb9, 0x81]; // emerald-500
 
 function chunk(type, data) {
   const typeBuf = Buffer.from(type, "ascii");
@@ -77,22 +79,83 @@ function drawIcon(size) {
     }
   };
 
-  // Three ascending bars, kept within the central ~60% safe zone so this
-  // also works as a maskable icon.
-  const baseline = size * 0.72;
-  const barWidth = size * 0.12;
-  const gap = size * 0.08;
-  const heights = [0.22, 0.36, 0.5];
-  const startX = size * 0.24;
+  const strokeRect = (x0, y0, x1, y1, thickness, color) => {
+    fillRect(x0, y0, x1, y0 + thickness, color);
+    fillRect(x0, y1 - thickness, x1, y1, color);
+    fillRect(x0, y0, x0 + thickness, y1, color);
+    fillRect(x1 - thickness, y0, x1, y1, color);
+  };
 
-  heights.forEach((h, idx) => {
-    const x0 = startX + idx * (barWidth + gap);
-    const x1 = x0 + barWidth;
-    const y0 = baseline - size * h;
-    fillRect(x0, y0, x1, baseline, BAR);
-  });
+  const strokeSegment = (x0, y0, x1, y1, thickness, color) => {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const steps = Math.ceil(dist * 2);
+    const r = thickness / 2;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const cx = x0 + dx * t;
+      const cy = y0 + dy * t;
+      for (let oy = -r; oy <= r; oy++) {
+        for (let ox = -r; ox <= r; ox++) {
+          if (ox * ox + oy * oy <= r * r) setPixel(Math.round(cx + ox), Math.round(cy + oy), color);
+        }
+      }
+    }
+  };
+
+  const strokePolyline = (points, thickness, color) => {
+    for (let i = 0; i < points.length - 1; i++) {
+      strokeSegment(points[i][0], points[i][1], points[i + 1][0], points[i + 1][1], thickness, color);
+    }
+  };
+
+  // Same "Desk" mark used in the app header (monitor + trend line + stand),
+  // laid out on the same 52x52 grid as the source SVG so proportions match
+  // exactly. Kept within a ~15% margin on every side for maskable safety.
+  const s = size / 52;
+  strokeRect(6 * s, 10 * s, 46 * s, 36 * s, Math.max(1, 3 * s), MARK);
+  strokePolyline(
+    [
+      [12 * s, 28 * s],
+      [20 * s, 22 * s],
+      [27 * s, 26 * s],
+      [34 * s, 17 * s],
+      [41 * s, 20 * s],
+    ],
+    Math.max(1, 2.6 * s),
+    MARK,
+  );
+  fillRect(20 * s, 40 * s, 32 * s, 43 * s, MARK);
 
   return encodePNG(size, size, rgba);
+}
+
+function encodeICO(pngBuffers) {
+  const count = pngBuffers.length;
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0); // reserved
+  header.writeUInt16LE(1, 2); // type: icon
+  header.writeUInt16LE(count, 4);
+
+  let offset = 6 + count * 16;
+  const entries = [];
+  const images = [];
+  for (const { size, data } of pngBuffers) {
+    const entry = Buffer.alloc(16);
+    entry.writeUInt8(size >= 256 ? 0 : size, 0); // width (0 = 256)
+    entry.writeUInt8(size >= 256 ? 0 : size, 1); // height (0 = 256)
+    entry.writeUInt8(0, 2); // color count
+    entry.writeUInt8(0, 3); // reserved
+    entry.writeUInt16LE(1, 4); // planes
+    entry.writeUInt16LE(32, 6); // bit count
+    entry.writeUInt32LE(data.length, 8); // bytes in resource
+    entry.writeUInt32LE(offset, 12); // image offset
+    offset += data.length;
+    entries.push(entry);
+    images.push(data);
+  }
+  return Buffer.concat([header, ...entries, ...images]);
 }
 
 const targets = [
@@ -102,7 +165,17 @@ const targets = [
   ["apple-touch-icon.png", 180],
 ];
 
+const pngsBySize = {};
 for (const [name, size] of targets) {
-  writeFileSync(join(outDir, name), drawIcon(size));
+  const data = drawIcon(size);
+  pngsBySize[size] = data;
+  writeFileSync(join(outDir, name), data);
   console.log(`Wrote ${name} (${size}x${size})`);
 }
+
+// Static favicon.ico read by Next's app-router favicon convention.
+const faviconSizes = [16, 32, 48];
+const faviconPngs = faviconSizes.map((size) => ({ size, data: drawIcon(size) }));
+const favicoPath = join(__dirname, "..", "src", "app", "favicon.ico");
+writeFileSync(favicoPath, encodeICO(faviconPngs));
+console.log(`Wrote favicon.ico (${faviconSizes.join("/")}px)`);

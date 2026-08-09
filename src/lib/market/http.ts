@@ -10,6 +10,6 @@ export const BROWSER_HEADERS = {
 // SEC EDGAR's fair-use policy requires a descriptive User-Agent identifying
 // the application and a contact address, not a spoofed browser UA.
 export const SEC_HEADERS = {
-  "User-Agent": "Trading Assistant (personal project; contact: abigailbowes21@gmail.com)",
+  "User-Agent": "MarketDesk (personal project; contact: abigailbowes21@gmail.com)",
   Accept: "application/json",
 };
