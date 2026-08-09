@@ -1,5 +1,9 @@
 -- Run this in the Supabase SQL editor (Project -> SQL Editor -> New query)
--- for your project. Sets up the watchlist table used to star stocks.
+-- for your project. Safe to re-run any time you pull in a newer version of
+-- this file (e.g. after a new table is added) -- every statement is
+-- idempotent: tables use `create table if not exists`, and policies are
+-- dropped and recreated rather than just `create policy`, since Postgres
+-- has no `create policy if not exists`.
 
 create table if not exists public.watchlist (
   id uuid primary key default gen_random_uuid(),
@@ -11,14 +15,17 @@ create table if not exists public.watchlist (
 
 alter table public.watchlist enable row level security;
 
+drop policy if exists "Users can view their own watchlist" on public.watchlist;
 create policy "Users can view their own watchlist"
   on public.watchlist for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can add to their own watchlist" on public.watchlist;
 create policy "Users can add to their own watchlist"
   on public.watchlist for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users can remove from their own watchlist" on public.watchlist;
 create policy "Users can remove from their own watchlist"
   on public.watchlist for delete
   using (auth.uid() = user_id);
@@ -38,18 +45,22 @@ create table if not exists public.alerts (
 
 alter table public.alerts enable row level security;
 
+drop policy if exists "Users can view their own alerts" on public.alerts;
 create policy "Users can view their own alerts"
   on public.alerts for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can create their own alerts" on public.alerts;
 create policy "Users can create their own alerts"
   on public.alerts for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users can update their own alerts" on public.alerts;
 create policy "Users can update their own alerts"
   on public.alerts for update
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can delete their own alerts" on public.alerts;
 create policy "Users can delete their own alerts"
   on public.alerts for delete
   using (auth.uid() = user_id);
@@ -68,14 +79,17 @@ create table if not exists public.drawings (
 
 alter table public.drawings enable row level security;
 
+drop policy if exists "Users can view their own drawings" on public.drawings;
 create policy "Users can view their own drawings"
   on public.drawings for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can create their own drawings" on public.drawings;
 create policy "Users can create their own drawings"
   on public.drawings for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users can delete their own drawings" on public.drawings;
 create policy "Users can delete their own drawings"
   on public.drawings for delete
   using (auth.uid() = user_id);
@@ -96,14 +110,17 @@ create table if not exists public.push_subscriptions (
 
 alter table public.push_subscriptions enable row level security;
 
+drop policy if exists "Users can view their own push subscriptions" on public.push_subscriptions;
 create policy "Users can view their own push subscriptions"
   on public.push_subscriptions for select
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can add their own push subscriptions" on public.push_subscriptions;
 create policy "Users can add their own push subscriptions"
   on public.push_subscriptions for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users can delete their own push subscriptions" on public.push_subscriptions;
 create policy "Users can delete their own push subscriptions"
   on public.push_subscriptions for delete
   using (auth.uid() = user_id);
