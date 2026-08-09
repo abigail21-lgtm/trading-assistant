@@ -46,27 +46,34 @@ export default function PriceAnalysisCard({
       )}
 
       {analysis.levels.length > 0 && (
-        <div className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
-          <div>
-            <p className="font-medium text-slate-500">Support</p>
-            {analysis.levels
-              .filter((l) => l.type === "support")
-              .map((l) => (
-                <p key={l.price} className="mt-0.5 text-slate-700 dark:text-slate-300">
-                  {formatPrice(l.price, currency)}
-                </p>
-              ))}
+        <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <p className="font-medium text-slate-500">Support</p>
+              {analysis.levels
+                .filter((l) => l.type === "support")
+                .map((l) => (
+                  <p key={l.price} className="mt-0.5 text-slate-700 dark:text-slate-300">
+                    {formatPrice(l.price, currency)}
+                  </p>
+                ))}
+            </div>
+            <div>
+              <p className="font-medium text-slate-500">Resistance</p>
+              {analysis.levels
+                .filter((l) => l.type === "resistance")
+                .map((l) => (
+                  <p key={l.price} className="mt-0.5 text-slate-700 dark:text-slate-300">
+                    {formatPrice(l.price, currency)}
+                  </p>
+                ))}
+            </div>
           </div>
-          <div>
-            <p className="font-medium text-slate-500">Resistance</p>
-            {analysis.levels
-              .filter((l) => l.type === "resistance")
-              .map((l) => (
-                <p key={l.price} className="mt-0.5 text-slate-700 dark:text-slate-300">
-                  {formatPrice(l.price, currency)}
-                </p>
-              ))}
-          </div>
+          <p className="mt-2 text-[11px] text-slate-400">
+            Support: price levels below where the stock has repeatedly stopped falling and bounced
+            back up. Resistance: price levels above where it has repeatedly stopped rising and
+            pulled back. Drawn from past price history — not a guarantee either will hold next time.
+          </p>
         </div>
       )}
 

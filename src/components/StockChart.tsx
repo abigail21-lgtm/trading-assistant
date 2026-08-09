@@ -469,6 +469,7 @@ export default function StockChart({
               type="button"
               onClick={() => setShowLevels((v) => !v)}
               aria-pressed={showLevels}
+              title="Support/resistance: price levels where the stock has repeatedly bounced (support) or pulled back (resistance) in the past. See the Analysis card for details."
               className={`font-medium ${
                 showLevels ? "text-slate-600 dark:text-slate-300" : "text-slate-400 dark:text-slate-600"
               }`}
