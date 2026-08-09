@@ -75,6 +75,12 @@ export default async function StockPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href={`/compare?symbols=${symbol},SPY`}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-800 dark:border-slate-800 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:text-slate-200"
+          >
+            Compare
+          </Link>
           <a
             href={`https://finance.yahoo.com/quote/${symbol}/options/`}
             target="_blank"

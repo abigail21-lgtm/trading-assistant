@@ -16,6 +16,7 @@ import type { SupportResistanceLevel } from "@/lib/market/analysis";
 import type { TrendLine, NewTrendLine } from "@/lib/market/drawings";
 import { addDrawing, clearDrawings, getDrawings, removeDrawing } from "@/lib/drawings-client";
 import { formatPercent } from "@/lib/format";
+import { useDomTheme } from "@/lib/useDomTheme";
 
 function lineDeltaPercent(line: TrendLine): number | null {
   if (!line.price1) return null;
@@ -65,25 +66,6 @@ const PALETTES = {
     resistance: "#ea580c",
   },
 } as const;
-
-function useDomTheme(): "light" | "dark" {
-  const [theme, setTheme] = useState<"light" | "dark">(() =>
-    typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "light"
-      ? "light"
-      : "dark",
-  );
-
-  useEffect(() => {
-    const el = document.documentElement;
-    const observer = new MutationObserver(() => {
-      setTheme(el.getAttribute("data-theme") === "light" ? "light" : "dark");
-    });
-    observer.observe(el, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => observer.disconnect();
-  }, []);
-
-  return theme;
-}
 
 export default function StockChart({
   candles,
