@@ -44,7 +44,11 @@ export async function addToWatchlist(symbol: string): Promise<void> {
   // error -- without this check, a failed write (e.g. an RLS rejection)
   // looked identical to a successful one, silently leaving the star "on"
   // in the UI while nothing was actually saved.
-  if (!res.ok) throw new Error(`Failed to add ${symbol} to watchlist`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    console.error(`Failed to add ${symbol} to watchlist (${res.status}):`, body?.error ?? "unknown error");
+    throw new Error(`Failed to add ${symbol} to watchlist`);
+  }
 }
 
 export async function removeFromWatchlist(symbol: string): Promise<void> {
@@ -54,5 +58,9 @@ export async function removeFromWatchlist(symbol: string): Promise<void> {
   }
 
   const res = await fetch(`/api/watchlist?symbol=${encodeURIComponent(symbol)}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(`Failed to remove ${symbol} from watchlist`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    console.error(`Failed to remove ${symbol} from watchlist (${res.status}):`, body?.error ?? "unknown error");
+    throw new Error(`Failed to remove ${symbol} from watchlist`);
+  }
 }
