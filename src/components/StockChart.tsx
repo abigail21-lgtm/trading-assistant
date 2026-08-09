@@ -6,10 +6,13 @@ import {
   CandlestickSeries,
   HistogramSeries,
   LineSeries,
+  LineStyle,
   type Time,
 } from "lightweight-charts";
 import type { Candle } from "@/lib/market/yahoo";
 import { sma } from "@/lib/market/indicators";
+import type { TrendLine, NewTrendLine } from "@/lib/market/drawings";
+import { addDrawing, clearDrawings, getDrawings } from "@/lib/drawings-client";
 
 function toDailyTime(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toISOString().slice(0, 10);
@@ -37,6 +40,7 @@ const PALETTES = {
     down: "#ef4444",
     volUp: "#10b98166",
     volDown: "#ef444466",
+    drawLine: "#f472b6",
   },
   light: {
     text: "#64748b",
@@ -46,6 +50,7 @@ const PALETTES = {
     down: "#dc2626",
     volUp: "#05966955",
     volDown: "#dc262655",
+    drawLine: "#db2777",
   },
 } as const;
 
@@ -71,12 +76,45 @@ function useDomTheme(): "light" | "dark" {
 export default function StockChart({
   candles,
   intraday = false,
+  symbol,
+  timeframeKey,
 }: {
   candles: Candle[];
   intraday?: boolean;
+  symbol: string;
+  timeframeKey: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const theme = useDomTheme();
+
+  const [drawings, setDrawings] = useState<TrendLine[]>([]);
+  const [drawMode, setDrawMode] = useState(false);
+  const [hasPendingPoint, setHasPendingPoint] = useState(false);
+  const drawModeRef = useRef(false);
+  const pendingPointRef = useRef<{ time: Time; price: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getDrawings(symbol, timeframeKey).then((lines) => {
+      if (!cancelled) setDrawings(lines);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [symbol, timeframeKey]);
+
+  function toggleDrawMode() {
+    const next = !drawMode;
+    setDrawMode(next);
+    drawModeRef.current = next;
+    pendingPointRef.current = null;
+    setHasPendingPoint(false);
+  }
+
+  async function handleClear() {
+    setDrawings([]);
+    await clearDrawings(symbol, timeframeKey);
+  }
 
   useEffect(() => {
     const container = containerRef.current;
@@ -153,7 +191,50 @@ export default function StockChart({
       );
     }
 
+    for (const line of drawings) {
+      const lineSeries = chart.addSeries(LineSeries, {
+        color: palette.drawLine,
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      });
+      lineSeries.setData([
+        { time: line.time1 as Time, value: line.price1 },
+        { time: line.time2 as Time, value: line.price2 },
+      ]);
+    }
+
     chart.timeScale().fitContent();
+
+    chart.subscribeClick((param) => {
+      if (!drawModeRef.current || !param.point || param.time == null) return;
+      const price = candleSeries.coordinateToPrice(param.point.y);
+      if (price == null) return;
+
+      if (!pendingPointRef.current) {
+        pendingPointRef.current = { time: param.time, price };
+        setHasPendingPoint(true);
+        return;
+      }
+
+      const start = pendingPointRef.current;
+      pendingPointRef.current = null;
+      setHasPendingPoint(false);
+      drawModeRef.current = false;
+      setDrawMode(false);
+
+      const newLine: NewTrendLine = {
+        time1: start.time as string | number,
+        price1: start.price,
+        time2: param.time as string | number,
+        price2: price,
+      };
+      addDrawing(symbol, timeframeKey, newLine).then((saved) => {
+        setDrawings((prev) => [...prev, saved]);
+      });
+    });
 
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
@@ -165,7 +246,7 @@ export default function StockChart({
       resizeObserver.disconnect();
       chart.remove();
     };
-  }, [candles, intraday, theme]);
+  }, [candles, intraday, theme, drawings, symbol, timeframeKey]);
 
   if (candles.length === 0) {
     return (
@@ -175,5 +256,33 @@ export default function StockChart({
     );
   }
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return (
+    <div className="flex h-full flex-col">
+      <div className="mb-1 flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleDrawMode}
+            className={`rounded-md px-2 py-1 font-medium transition ${
+              drawMode
+                ? "bg-emerald-600 text-white"
+                : "border border-slate-200 text-slate-500 hover:text-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            }`}
+          >
+            {drawMode ? (hasPendingPoint ? "Click end point…" : "Click start point…") : "Draw trendline"}
+          </button>
+          {drawings.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="rounded-md px-2 py-1 font-medium text-slate-500 transition hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400"
+            >
+              Clear lines
+            </button>
+          )}
+        </div>
+      </div>
+      <div ref={containerRef} className="min-h-0 flex-1" />
+    </div>
+  );
 }

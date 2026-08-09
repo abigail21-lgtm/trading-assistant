@@ -1,5 +1,9 @@
+"use client";
+
+import { useState } from "react";
 import type { EarningsEvent } from "@/lib/market/calendar";
 import { formatDate } from "@/lib/format";
+import CollapsibleCardShell from "./CollapsibleCardShell";
 
 const TIME_LABELS: Record<string, string> = {
   "pre-market": "Before market open",
@@ -8,21 +12,30 @@ const TIME_LABELS: Record<string, string> = {
 };
 
 export default function UpcomingEarningsCard({ event }: { event: EarningsEvent | null }) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Next Earnings</h3>
+    <CollapsibleCardShell
+      title="Next Earnings"
+      open={open}
+      onToggle={() => setOpen((v) => !v)}
+      summary={
+        <span className={event ? "font-medium text-slate-900 dark:text-slate-100" : "text-slate-500"}>
+          {event ? formatDate(dateToUnix(event.date)) : "No date yet"}
+        </span>
+      }
+    >
       {event ? (
-        <div className="mt-2">
-          <p className="text-base font-medium text-slate-900 dark:text-slate-100">{formatDate(dateToUnix(event.date))}</p>
+        <div>
           <p className="text-sm text-slate-500">{TIME_LABELS[event.time] ?? event.time}</p>
           {event.epsForecast != null && (
             <p className="mt-1 text-xs text-slate-500">Consensus EPS forecast: ${event.epsForecast.toFixed(2)}</p>
           )}
         </div>
       ) : (
-        <p className="mt-2 text-sm text-slate-500">No confirmed date yet.</p>
+        <p className="text-sm text-slate-500">No confirmed date in the next 30 days.</p>
       )}
-    </div>
+    </CollapsibleCardShell>
   );
 }
 

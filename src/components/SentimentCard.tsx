@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import type { SentimentSummary } from "@/lib/market/sentiment";
+import CollapsibleCardShell from "./CollapsibleCardShell";
 
 const LABEL_STYLES: Record<SentimentSummary["label"], string> = {
   Bullish: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
@@ -29,15 +33,22 @@ export default function SentimentCard({
   sector: SentimentSummary | null;
   market: SentimentSummary | null;
 }) {
+  const [open, setOpen] = useState(false);
+  const value = stock?.label ?? "Unknown";
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Sentiment</h3>
-      <p className="mt-0.5 text-[11px] text-slate-400">From recent StockTwits activity</p>
-      <div className="mt-3 space-y-2">
+    <CollapsibleCardShell
+      title="Sentiment"
+      open={open}
+      onToggle={() => setOpen((v) => !v)}
+      summary={<span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${LABEL_STYLES[value]}`}>{value}</span>}
+    >
+      <p className="mb-2 text-[11px] text-slate-400">From recent StockTwits activity</p>
+      <div className="space-y-2">
         <SentimentBadge label="This stock" sentiment={stock} />
         <SentimentBadge label="Sector" sentiment={sector} />
         <SentimentBadge label="Market" sentiment={market} />
       </div>
-    </div>
+    </CollapsibleCardShell>
   );
 }

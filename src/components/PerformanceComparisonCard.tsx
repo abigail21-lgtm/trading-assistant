@@ -1,6 +1,10 @@
+"use client";
+
+import { useState } from "react";
 import type { PeriodReturn } from "@/lib/market/comparison";
 import { compareInsights } from "@/lib/market/comparison";
 import { changeColorClass, formatPercent } from "@/lib/format";
+import CollapsibleCardShell from "./CollapsibleCardShell";
 
 export default function PerformanceComparisonCard({
   stock,
@@ -11,15 +15,22 @@ export default function PerformanceComparisonCard({
   market: PeriodReturn;
   sector: PeriodReturn | null;
 }) {
+  const [open, setOpen] = useState(false);
   const insights = compareInsights(stock, market, sector);
   const rows = [stock, market, ...(sector ? [sector] : [])];
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-        Performance vs Market &amp; Sector
-      </h3>
-      <div className="mt-3 space-y-2">
+    <CollapsibleCardShell
+      title="Performance vs Market & Sector"
+      open={open}
+      onToggle={() => setOpen((v) => !v)}
+      summary={
+        <span className={`font-medium ${changeColorClass(stock.returnPercent)}`}>
+          {formatPercent(stock.returnPercent)}
+        </span>
+      }
+    >
+      <div className="space-y-2">
         {rows.map((r) => (
           <div key={r.symbol} className="flex items-center justify-between text-sm">
             <span className="text-slate-500">{r.name}</span>
@@ -38,6 +49,6 @@ export default function PerformanceComparisonCard({
           ))}
         </div>
       )}
-    </div>
+    </CollapsibleCardShell>
   );
 }

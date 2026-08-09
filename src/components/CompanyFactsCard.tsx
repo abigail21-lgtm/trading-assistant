@@ -1,5 +1,9 @@
+"use client";
+
+import { useState } from "react";
 import type { CompanyFacts } from "@/lib/market/ratings";
 import { changeColorClass, formatCompactNumber, formatPercent, formatPrice } from "@/lib/format";
+import CollapsibleCardShell from "./CollapsibleCardShell";
 
 export default function CompanyFactsCard({
   facts,
@@ -10,34 +14,34 @@ export default function CompanyFactsCard({
   currentPrice: number | null;
   currency: string;
 }) {
+  const [open, setOpen] = useState(false);
   const upside =
     facts.oneYearTargetPrice != null && currentPrice
       ? ((facts.oneYearTargetPrice - currentPrice) / currentPrice) * 100
       : null;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Analyst Target</h3>
-        <span className="text-[10px] uppercase tracking-wide text-slate-400">Consensus, best-effort</span>
-      </div>
-
-      {facts.oneYearTargetPrice != null ? (
-        <div className="mt-2">
-          <p className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-            {formatPrice(facts.oneYearTargetPrice, currency)}
-          </p>
-          {upside != null && (
-            <p className={`text-sm font-medium ${changeColorClass(upside)}`}>
-              {formatPercent(upside)} from current price
-            </p>
-          )}
-        </div>
-      ) : (
-        <p className="mt-2 text-sm text-slate-500">No price target available.</p>
-      )}
-
-      <dl className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-sm dark:border-slate-800">
+    <CollapsibleCardShell
+      title="Analyst Target"
+      open={open}
+      onToggle={() => setOpen((v) => !v)}
+      summary={
+        facts.oneYearTargetPrice != null ? (
+          <>
+            <span className="font-semibold text-slate-900 dark:text-slate-100">
+              {formatPrice(facts.oneYearTargetPrice, currency)}
+            </span>
+            {upside != null && (
+              <span className={`ml-1.5 font-medium ${changeColorClass(upside)}`}>{formatPercent(upside)}</span>
+            )}
+          </>
+        ) : (
+          <span className="text-slate-500">No target</span>
+        )
+      }
+    >
+      <p className="text-[10px] uppercase tracking-wide text-slate-400">Consensus, best-effort</p>
+      <dl className="mt-2 space-y-1.5 text-sm">
         {facts.sector && (
           <Row label="Sector" value={facts.industry ? `${facts.sector} · ${facts.industry}` : facts.sector} />
         )}
@@ -47,7 +51,7 @@ export default function CompanyFactsCard({
         )}
         {facts.exDividendDate && <Row label="Ex-Dividend Date" value={facts.exDividendDate} />}
       </dl>
-    </div>
+    </CollapsibleCardShell>
   );
 }
 

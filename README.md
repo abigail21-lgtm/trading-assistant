@@ -115,8 +115,35 @@ browser's local storage, not the account).
 - **Performance comparison:** pure client-independent math
   (`src/lib/market/comparison.ts`) over OHLCV already fetched for the chart,
   the sector ETF, and SPY — no extra API calls beyond those two chart fetches.
+- **Auto-analysis:** `src/lib/market/analysis.ts` computes a trend read
+  (up/down/range, from 20/50-period moving averages) and support/resistance
+  levels (clustering local pivot highs/lows) purely from OHLCV already on the
+  page — no extra API calls, and it flags bounce-off-support /
+  rejected-at-resistance signals.
+- **Alerts:** price-target, moving-average-cross, and volume-spike rules
+  (`src/lib/market/alerts.ts`), stored via `src/lib/alerts-client.ts` (same
+  local/Supabase pattern as the watchlist). Checked **in-app only** —
+  `src/components/AlertsWatcher.tsx` polls every 5 minutes while the app is
+  open and fires a browser Notification. This is not push: it won't fire
+  with the tab/app closed. True push needs a deployed server, a scheduled
+  job, and VAPID keys — worth adding once this app is actually deployed
+  somewhere with a scheduler available.
+- **Chart drawings:** click-to-draw trend lines on the chart
+  (`StockChart`'s "Draw trendline" button, using lightweight-charts'
+  `subscribeClick` + `coordinateToPrice`), persisted per symbol *and*
+  candle size (a line drawn on a daily chart isn't meaningful on a 1-minute
+  chart) via `src/lib/drawings-client.ts`.
+- **Options:** a "Options chain ↗" link to Yahoo Finance's options page for
+  the ticker — no free full options-chain API worth building an in-app
+  viewer around.
+- **Collapsible cards:** the stock page's secondary cards (performance
+  comparison, analyst target, sentiment, next earnings) show a one-line "at
+  a glance" summary and expand on click (`CollapsibleCardShell`), so the
+  page doesn't dump a wall of detail on mobile. Chart + News share the main
+  column so there's no leftover gap next to a shorter sidebar on desktop.
 
 ## What's next
 
-Phase 3: custom alerts + push notifications, auto-analysis (support/resistance,
-trend detection), persisted chart drawings, options-chain link-out.
+Ideas for later: true push notifications (once deployed), per-analyst
+ratings breakdowns (would need a paid API), sector/market-wide auto-analysis,
+multi-line/annotation drawing tools.

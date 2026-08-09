@@ -7,6 +7,7 @@ import IndexCard from "@/components/IndexCard";
 import SectorGrid from "@/components/SectorGrid";
 import WatchlistSection from "@/components/WatchlistSection";
 import WatchlistCalendarSection from "@/components/WatchlistCalendarSection";
+import AlertsOverview from "@/components/AlertsOverview";
 import NewsList from "@/components/NewsList";
 import { SentimentBadge } from "@/components/SentimentCard";
 
@@ -64,6 +65,7 @@ export default async function HomePage() {
         </div>
 
         <div className="space-y-8">
+          <AlertsOverview />
           <WatchlistCalendarSection />
 
           <section>

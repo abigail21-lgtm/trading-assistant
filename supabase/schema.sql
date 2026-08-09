@@ -22,3 +22,60 @@ create policy "Users can add to their own watchlist"
 create policy "Users can remove from their own watchlist"
   on public.watchlist for delete
   using (auth.uid() = user_id);
+
+-- Custom price/moving-average/volume alerts. `id` is client-generated (see
+-- src/lib/alerts-client.ts) so local-mode and Supabase-mode alerts use the
+-- same id scheme. `rule` holds the full AlertRule JSON (kind, thresholds,
+-- lastFiredAt, ...); `symbol` is duplicated out as a plain column in case
+-- you want to index/filter by it later.
+create table if not exists public.alerts (
+  id text primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  symbol text not null,
+  rule jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.alerts enable row level security;
+
+create policy "Users can view their own alerts"
+  on public.alerts for select
+  using (auth.uid() = user_id);
+
+create policy "Users can create their own alerts"
+  on public.alerts for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update their own alerts"
+  on public.alerts for update
+  using (auth.uid() = user_id);
+
+create policy "Users can delete their own alerts"
+  on public.alerts for delete
+  using (auth.uid() = user_id);
+
+-- Chart trend lines, scoped per symbol + candle timeframe (a line drawn on
+-- a 1-day chart isn't meaningful on a 1-minute chart, so they're stored
+-- separately). `line` holds the full TrendLine JSON (endpoints + price).
+create table if not exists public.drawings (
+  id text primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  symbol text not null,
+  timeframe text not null,
+  line jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.drawings enable row level security;
+
+create policy "Users can view their own drawings"
+  on public.drawings for select
+  using (auth.uid() = user_id);
+
+create policy "Users can create their own drawings"
+  on public.drawings for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can delete their own drawings"
+  on public.drawings for delete
+  using (auth.uid() = user_id);

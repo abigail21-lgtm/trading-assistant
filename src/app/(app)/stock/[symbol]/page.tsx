@@ -8,6 +8,7 @@ import { getSentiment } from "@/lib/market/sentiment";
 import { getStockNews } from "@/lib/market/news";
 import { computePeriodReturn } from "@/lib/market/comparison";
 import { sectorNameToEtf } from "@/lib/market/symbols";
+import { analyzePriceAction } from "@/lib/market/analysis";
 import { changeColorClass, formatCompactNumber, formatPercent, formatPrice } from "@/lib/format";
 import StockChart from "@/components/StockChart";
 import StarButton from "@/components/StarButton";
@@ -16,6 +17,8 @@ import CompanyFactsCard from "@/components/CompanyFactsCard";
 import SentimentCard from "@/components/SentimentCard";
 import UpcomingEarningsCard from "@/components/UpcomingEarningsCard";
 import NewsList from "@/components/NewsList";
+import PriceAnalysisCard from "@/components/PriceAnalysisCard";
+import AlertsPanel from "@/components/AlertsPanel";
 
 export default async function StockPage({
   params,
@@ -70,7 +73,17 @@ export default async function StockPage({
             {quote.longName} · {quote.exchangeName}
           </p>
         </div>
-        <StarButton symbol={quote.symbol} />
+        <div className="flex items-center gap-2">
+          <a
+            href={`https://finance.yahoo.com/quote/${symbol}/options/`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-800 dark:border-slate-800 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:text-slate-200"
+          >
+            Options chain ↗
+          </a>
+          <StarButton symbol={quote.symbol} />
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-baseline gap-3">
@@ -90,8 +103,12 @@ export default async function StockPage({
         <Stat label="Previous Close" value={formatPrice(quote.previousClose, quote.currency)} />
       </dl>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      {/* On mobile this is a single column following DOM order: chart, then
+          the at-a-glance sidebar cards, then news. At lg+, explicit grid
+          placement makes the sidebar span both rows so it runs the full
+          height beside chart + news instead of leaving a gap underneath. */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-3 lg:grid-rows-[auto_auto]">
+        <div className="lg:col-start-1 lg:col-span-2 lg:row-start-1">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex gap-1 overflow-x-auto">
               {TIMEFRAMES.map((t) => (
@@ -116,11 +133,13 @@ export default async function StockPage({
           </div>
 
           <div className="mt-3 h-[380px] rounded-xl border border-slate-200 bg-white p-2 sm:h-[460px] lg:h-[560px] dark:border-slate-800 dark:bg-slate-900">
-            <StockChart candles={candles} intraday={timeframe.intraday} />
+            <StockChart candles={candles} intraday={timeframe.intraday} symbol={symbol} timeframeKey={timeframe.key} />
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 lg:col-start-3 lg:row-start-1 lg:row-span-2">
+          <PriceAnalysisCard analysis={analyzePriceAction(candles)} currency={quote.currency} />
+          <AlertsPanel symbol={symbol} currentPrice={quote.regularMarketPrice} />
           <Suspense fallback={<CardSkeleton />}>
             <ComparisonSection symbol={symbol} timeframe={timeframe} candles={candles} />
           </Suspense>
@@ -134,14 +153,14 @@ export default async function StockPage({
             <NextEarningsSection symbol={symbol} />
           </Suspense>
         </div>
-      </div>
 
-      <section className="mt-8">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">News</h2>
-        <Suspense fallback={<NewsSkeleton />}>
-          <NewsSection symbol={symbol} />
-        </Suspense>
-      </section>
+        <section className="lg:col-start-1 lg:col-span-2 lg:row-start-2">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">News</h2>
+          <Suspense fallback={<NewsSkeleton />}>
+            <NewsSection symbol={symbol} />
+          </Suspense>
+        </section>
+      </div>
     </div>
   );
 }
