@@ -5,16 +5,22 @@ import type { AlertRule } from "@/lib/market/alerts";
 import { ALERT_COOLDOWN_MS, buildAlertContext, evaluateAlert, notificationMessage } from "@/lib/market/alerts";
 import { getAlerts, markAlertFired } from "@/lib/alerts-client";
 import { getNotificationPermission, showNotification } from "@/lib/notifications";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
 // Mounted once, globally (see NavShell). Polls active alerts while the app
-// is open and fires a browser Notification when a condition is met — see
-// the README for why this is in-app-only rather than true push for now.
+// is open and fires a browser Notification when a condition is met.
+//
+// In Supabase mode this is redundant with (and would double-fire alongside)
+// netlify/functions/check-alerts, which does the same check server-side on
+// a schedule and works even with the app closed — so this only runs in
+// local mode, where there's no server that knows about the alerts at all.
 export default function AlertsWatcher() {
   const runningRef = useRef(false);
 
   useEffect(() => {
+    if (isSupabaseConfigured) return;
     async function checkAlerts() {
       if (runningRef.current) return;
       if (getNotificationPermission() !== "granted") return;

@@ -79,3 +79,31 @@ create policy "Users can create their own drawings"
 create policy "Users can delete their own drawings"
   on public.drawings for delete
   using (auth.uid() = user_id);
+
+-- Web Push subscriptions (one row per browser/device the user enabled
+-- notifications on). Read by the scheduled Netlify function
+-- (netlify/functions/check-alerts) using the service_role key, which
+-- bypasses RLS -- that's expected, since that job checks every user's
+-- alerts on a timer with no logged-in session to scope to.
+create table if not exists public.push_subscriptions (
+  id text primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth_key text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.push_subscriptions enable row level security;
+
+create policy "Users can view their own push subscriptions"
+  on public.push_subscriptions for select
+  using (auth.uid() = user_id);
+
+create policy "Users can add their own push subscriptions"
+  on public.push_subscriptions for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can delete their own push subscriptions"
+  on public.push_subscriptions for delete
+  using (auth.uid() = user_id);

@@ -48,7 +48,11 @@ Go to [supabase.com](https://supabase.com), create a free project, then:
    ```
 
 5. **Authentication → URL Configuration** — set the Site URL to your local
-   dev URL (`http://localhost:3000`) for now; add your production URL once deployed.
+   dev URL (`http://localhost:3000`) for now; **once deployed, update this to
+   your production URL and add it to Redirect URLs too** — magic links sent
+   before that update will point at the wrong place. Public sign-up is on by
+   default, so any number of people can create their own account; there's
+   nothing extra to configure for multi-user access specifically.
 
 ### 2. Configure environment variables
 
@@ -61,6 +65,57 @@ step 1, then restart the dev server. Sign-in, session handling, and the
 watchlist now go through Supabase instead of local storage; anything starred
 while in local mode does **not** carry over automatically (it's in the
 browser's local storage, not the account).
+
+**Deploying:** `.env.local` is never deployed (it's gitignored) — set the
+same two variables in your host's environment variable settings (e.g.
+Netlify: Site configuration → Environment variables) or the deployed app
+will silently fall back to local mode, and nobody will be able to sign in.
+
+## Push notifications (optional, needs Supabase + a deployment)
+
+Alerts (price target / moving-average cross / volume spike) can notify you
+two ways:
+
+- **In-app** (works in both local and Supabase mode): checked every 5
+  minutes while the app is open, via a browser Notification. This is the
+  only option in local mode, since there's no server that knows what your
+  alerts are.
+- **True push** (Supabase mode only, and only once deployed): checked every
+  5 minutes by a scheduled server function — fires even if the app is fully
+  closed. In Supabase mode, the in-app checker turns itself off so you don't
+  get double-notified.
+
+To turn on true push:
+
+1. **Add the push-subscriptions table** — run
+   [`supabase/schema.sql`](./supabase/schema.sql) again (it's all
+   `create table if not exists`, safe to re-run).
+2. **Get your service role key** — Supabase Project Settings → API →
+   `service_role` secret. This is different from the `anon` key you already
+   have: it bypasses row-level security, which the scheduled function needs
+   since it checks every user's alerts with no logged-in session. **Never**
+   put this behind `NEXT_PUBLIC_` or expose it to the client.
+3. **VAPID keys** — already generated for you in `.env.local`
+   (`NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`).
+   These identify this app to push services (Chrome's, Apple's, etc.); only
+   regenerate them (`npx web-push generate-vapid-keys`) if you specifically
+   want to invalidate every existing push subscription.
+4. **Set all four env vars** (`SUPABASE_SERVICE_ROLE_KEY`,
+   `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) in
+   your host's environment variables at deploy time, same as the Supabase
+   ones above.
+5. **Deploy.** The checker (`netlify/functions/check-alerts.mts`) is a
+   [Netlify Scheduled Function](https://docs.netlify.com/build/functions/scheduled-functions/)
+   — it runs on Netlify's schedule (every 5 minutes) and does **not** run in
+   `next dev`. There's nothing to start manually; once deployed with the env
+   vars above set, it's live.
+
+To test after deploying: open the app, sign in, click "Enable notifications"
+on a stock's Alerts panel, and grant the browser permission prompt. Check
+Supabase's Table Editor → `push_subscriptions` — a row should appear for
+your account. Add an alert with a condition that's already true (e.g. a
+price-below target above the current price) and wait up to 5 minutes; a
+push notification should arrive even with the tab closed.
 
 ## Architecture
 
@@ -95,7 +150,8 @@ browser's local storage, not the account).
   framework plugin) make the app installable on phone and laptop, with
   static-asset caching for offline resilience. Market/auth data is
   deliberately never cached by the service worker, so you never see stale
-  prices.
+  prices. The same service worker also handles incoming Web Push events
+  (`push`/`notificationclick`) for true push notifications.
 - **News:** Yahoo Finance's keyless search endpoint (`src/lib/market/news.ts`),
   used both for a stock's own news and (broad query) general market news.
 - **Analyst target & company facts:** Nasdaq's public site API
@@ -122,12 +178,19 @@ browser's local storage, not the account).
   rejected-at-resistance signals.
 - **Alerts:** price-target, moving-average-cross, and volume-spike rules
   (`src/lib/market/alerts.ts`), stored via `src/lib/alerts-client.ts` (same
-  local/Supabase pattern as the watchlist). Checked **in-app only** —
-  `src/components/AlertsWatcher.tsx` polls every 5 minutes while the app is
-  open and fires a browser Notification. This is not push: it won't fire
-  with the tab/app closed. True push needs a deployed server, a scheduled
-  job, and VAPID keys — worth adding once this app is actually deployed
-  somewhere with a scheduler available.
+  local/Supabase pattern as the watchlist), checked one of two ways
+  depending on mode — see "Push notifications" above:
+  - **Local mode:** in-app only. `src/components/AlertsWatcher.tsx` polls
+    every 5 minutes while the app is open and fires a browser Notification;
+    it won't fire with the tab closed, since there's no server tracking
+    local-mode alerts at all.
+  - **Supabase mode:** true push. `netlify/functions/check-alerts.mts` runs
+    the same evaluation logic (`buildAlertContext`/`evaluateAlert`) on a
+    5-minute Netlify Scheduled Function, using the Supabase service-role key
+    to read every user's alerts and push subscriptions, and `web-push` to
+    deliver notifications via each browser's push service — fires even with
+    the app fully closed. `AlertsWatcher` disables its own polling in this
+    mode to avoid double-firing.
 - **Chart drawings:** click-to-draw trend lines on the chart
   (`StockChart`'s "Draw trendline" button, using lightweight-charts'
   `subscribeClick` + `coordinateToPrice`), persisted per symbol *and*
