@@ -1,9 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 const PUBLIC_PAGE_PREFIXES = ["/login", "/auth"];
 
 export async function proxy(request: NextRequest) {
+  // No Supabase project configured yet: run in local mode, no auth gate.
+  if (!isSupabaseConfigured) return NextResponse.next();
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

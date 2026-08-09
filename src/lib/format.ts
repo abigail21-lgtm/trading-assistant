@@ -21,7 +21,7 @@ export function formatCompactNumber(value: number | null): string {
 
 export function changeColorClass(value: number | null): string {
   if (value == null || Number.isNaN(value)) return "text-slate-500";
-  if (value > 0) return "text-emerald-400";
-  if (value < 0) return "text-red-400";
-  return "text-slate-400";
+  if (value > 0) return "text-emerald-600 dark:text-emerald-400";
+  if (value < 0) return "text-red-600 dark:text-red-400";
+  return "text-slate-500 dark:text-slate-400";
 }

@@ -20,15 +20,15 @@ export default function StockSearchPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-6">
-      <h1 className="mb-4 text-lg font-semibold text-slate-100">Search a stock</h1>
+    <div className="mx-auto max-w-lg px-4 py-6 lg:max-w-2xl lg:px-8 lg:py-10">
+      <h1 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">Search a stock</h1>
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           autoFocus
           placeholder="Ticker symbol, e.g. AAPL"
-          className="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
+          className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
         />
         <button
           type="submit"
@@ -47,7 +47,7 @@ export default function StockSearchPage() {
             <button
               key={symbol}
               onClick={() => go(symbol)}
-              className="rounded-full border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-300 transition hover:border-slate-700"
+              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-700"
             >
               {symbol}
             </button>

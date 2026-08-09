@@ -1,40 +1,37 @@
 import Link from "next/link";
-import { getChart, SymbolNotFoundError } from "@/lib/market/yahoo";
-import { createClient } from "@/lib/supabase/server";
+import { getChart, getQuoteSummary, SymbolNotFoundError } from "@/lib/market/yahoo";
+import { TIMEFRAMES, DEFAULT_TIMEFRAME_KEY, getTimeframe } from "@/lib/market/timeframes";
 import { changeColorClass, formatCompactNumber, formatPercent, formatPrice } from "@/lib/format";
 import StockChart from "@/components/StockChart";
 import StarButton from "@/components/StarButton";
-
-const RANGES = [
-  { value: "1mo", label: "1M" },
-  { value: "3mo", label: "3M" },
-  { value: "6mo", label: "6M" },
-  { value: "1y", label: "1Y" },
-  { value: "5y", label: "5Y" },
-  { value: "max", label: "Max" },
-];
-const VALID_RANGES = new Set(RANGES.map((r) => r.value));
 
 export default async function StockPage({
   params,
   searchParams,
 }: {
   params: Promise<{ symbol: string }>;
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ tf?: string }>;
 }) {
   const { symbol: rawSymbol } = await params;
   const symbol = rawSymbol.toUpperCase();
-  const { range: rawRange } = await searchParams;
-  const range = VALID_RANGES.has(rawRange ?? "") ? rawRange! : "6mo";
+  const { tf: rawTf } = await searchParams;
+  const tfKey = TIMEFRAMES.some((t) => t.key === rawTf) ? rawTf! : DEFAULT_TIMEFRAME_KEY;
+  const timeframe = getTimeframe(tfKey);
 
-  let chart;
+  let quote, chart;
   try {
-    chart = await getChart(symbol, range, "1d");
+    // The header stats always come from a fixed 5-day daily fetch (accurate
+    // "previous close" regardless of which candle size is selected for the
+    // chart itself — see getQuoteSummary).
+    [quote, chart] = await Promise.all([
+      getQuoteSummary(symbol),
+      getChart(symbol, timeframe.range, timeframe.interval),
+    ]);
   } catch (err) {
     const notFound = err instanceof SymbolNotFoundError;
     return (
       <div className="mx-auto max-w-lg px-4 py-10 text-center">
-        <p className="text-lg font-medium text-slate-200">
+        <p className="text-lg font-medium text-slate-800 dark:text-slate-200">
           {notFound ? `No data for "${symbol}"` : "Couldn't load that stock"}
         </p>
         <p className="mt-1 text-sm text-slate-500">
@@ -50,64 +47,50 @@ export default async function StockPage({
     );
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  let starred = false;
-  if (user) {
-    const { data } = await supabase
-      .from("watchlist")
-      .select("symbol")
-      .eq("symbol", symbol)
-      .maybeSingle();
-    starred = !!data;
-  }
-
-  const { meta, candles } = chart;
+  const { candles } = chart;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6">
+    <div className="mx-auto max-w-7xl px-4 py-6 lg:px-8">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-slate-100">{meta.symbol}</h1>
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{quote.symbol}</h1>
           <p className="truncate text-sm text-slate-500">
-            {meta.longName} · {meta.exchangeName}
+            {quote.longName} · {quote.exchangeName}
           </p>
         </div>
-        <StarButton symbol={meta.symbol} initialStarred={starred} />
+        <StarButton symbol={quote.symbol} />
       </div>
 
       <div className="mt-4 flex flex-wrap items-baseline gap-3">
-        <span className="text-3xl font-semibold text-slate-100">
-          {formatPrice(meta.regularMarketPrice, meta.currency)}
+        <span className="text-3xl font-semibold text-slate-900 dark:text-slate-100">
+          {formatPrice(quote.regularMarketPrice, quote.currency)}
         </span>
-        <span className={`text-base font-medium ${changeColorClass(meta.changePercent)}`}>
-          {meta.changeAbsolute != null && formatPrice(meta.changeAbsolute, meta.currency)}{" "}
-          ({formatPercent(meta.changePercent)})
+        <span className={`text-base font-medium ${changeColorClass(quote.changePercent)}`}>
+          {quote.changeAbsolute != null && formatPrice(quote.changeAbsolute, quote.currency)}{" "}
+          ({formatPercent(quote.changePercent)})
         </span>
       </div>
 
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-        <Stat label="Day Range" value={`${formatPrice(meta.dayLow, meta.currency)} – ${formatPrice(meta.dayHigh, meta.currency)}`} />
-        <Stat label="52-Week Range" value={`${formatPrice(meta.fiftyTwoWeekLow, meta.currency)} – ${formatPrice(meta.fiftyTwoWeekHigh, meta.currency)}`} />
-        <Stat label="Volume" value={formatCompactNumber(meta.regularMarketVolume)} />
-        <Stat label="Previous Close" value={formatPrice(meta.previousClose, meta.currency)} />
+        <Stat label="Day Range" value={`${formatPrice(quote.dayLow, quote.currency)} – ${formatPrice(quote.dayHigh, quote.currency)}`} />
+        <Stat label="52-Week Range" value={`${formatPrice(quote.fiftyTwoWeekLow, quote.currency)} – ${formatPrice(quote.fiftyTwoWeekHigh, quote.currency)}`} />
+        <Stat label="Volume" value={formatCompactNumber(quote.regularMarketVolume)} />
+        <Stat label="Previous Close" value={formatPrice(quote.previousClose, quote.currency)} />
       </dl>
 
-      <div className="mt-6 flex items-center justify-between">
-        <div className="flex gap-1">
-          {RANGES.map((r) => (
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-1 overflow-x-auto">
+          {TIMEFRAMES.map((t) => (
             <Link
-              key={r.value}
-              href={`/stock/${symbol}?range=${r.value}`}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                r.value === range
-                  ? "bg-emerald-600/20 text-emerald-400"
-                  : "text-slate-500 hover:text-slate-300"
+              key={t.key}
+              href={`/stock/${symbol}?tf=${t.key}`}
+              className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${
+                t.key === timeframe.key
+                  ? "bg-emerald-600/10 text-emerald-600 dark:bg-emerald-600/20 dark:text-emerald-400"
+                  : "text-slate-500 hover:text-slate-800 dark:text-slate-500 dark:hover:text-slate-300"
               }`}
             >
-              {r.label}
+              {t.label}
             </Link>
           ))}
         </div>
@@ -118,8 +101,8 @@ export default async function StockPage({
         </div>
       </div>
 
-      <div className="mt-3 h-[360px] rounded-xl border border-slate-800 bg-slate-900 p-2 sm:h-[440px]">
-        <StockChart candles={candles} />
+      <div className="mt-3 h-[380px] rounded-xl border border-slate-200 bg-white p-2 sm:h-[460px] lg:h-[560px] dark:border-slate-800 dark:bg-slate-900">
+        <StockChart candles={candles} intraday={timeframe.intraday} />
       </div>
     </div>
   );
@@ -129,7 +112,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="text-xs text-slate-500">{label}</dt>
-      <dd className="font-medium text-slate-200">{value}</dd>
+      <dd className="font-medium text-slate-700 dark:text-slate-200">{value}</dd>
     </div>
   );
 }

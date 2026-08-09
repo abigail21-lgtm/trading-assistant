@@ -1,6 +1,16 @@
 @import "tailwindcss";
 
+/* Manual light/dark toggle: `dark:` utilities respond to a `data-theme="dark"`
+   ancestor (set by the inline init script / ThemeToggle) instead of only the
+   `prefers-color-scheme` media query. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+}
+
+[data-theme="dark"] {
   --background: #020617;
   --foreground: #f1f5f9;
 }

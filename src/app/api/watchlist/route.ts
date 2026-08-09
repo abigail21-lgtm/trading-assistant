@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+
+const NOT_CONFIGURED = NextResponse.json(
+  { error: "Supabase is not configured; the client should use local storage instead." },
+  { status: 501 },
+);
 
 export async function GET() {
+  if (!isSupabaseConfigured) return NOT_CONFIGURED;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -19,6 +27,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!isSupabaseConfigured) return NOT_CONFIGURED;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -39,6 +49,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  if (!isSupabaseConfigured) return NOT_CONFIGURED;
+
   const supabase = await createClient();
   const {
     data: { user },

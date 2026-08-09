@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import ThemeToggle from "./ThemeToggle";
 
 const TABS = [
   { href: "/", label: "Home", icon: HomeIcon },
@@ -23,8 +25,8 @@ export default function NavShell({
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
-        <Link href="/" className="text-base font-semibold text-slate-100">
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-8 dark:border-slate-800 dark:bg-slate-950/95">
+        <Link href="/" className="text-base font-semibold text-slate-900 dark:text-slate-100">
           Trading Assistant
         </Link>
 
@@ -35,8 +37,8 @@ export default function NavShell({
               href={tab.href}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 isActive(tab.href)
-                  ? "bg-emerald-600/20 text-emerald-400"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-emerald-600/10 text-emerald-600 dark:bg-emerald-600/20 dark:text-emerald-400"
+                  : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
               }`}
             >
               {tab.label}
@@ -44,26 +46,35 @@ export default function NavShell({
           ))}
         </nav>
 
-        <div className="flex items-center gap-3">
-          {userEmail && (
-            <span className="hidden max-w-[10rem] truncate text-xs text-slate-500 sm:inline">
-              {userEmail}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {isSupabaseConfigured ? (
+            <>
+              {userEmail && (
+                <span className="hidden max-w-[10rem] truncate text-xs text-slate-500 sm:inline">
+                  {userEmail}
+                </span>
+              )}
+              <form action="/auth/signout" method="post">
+                <button
+                  type="submit"
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-800 dark:border-slate-800 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:text-slate-200"
+                >
+                  Sign out
+                </button>
+              </form>
+            </>
+          ) : (
+            <span className="hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 sm:inline dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400">
+              Local mode
             </span>
           )}
-          <form action="/auth/signout" method="post">
-            <button
-              type="submit"
-              className="rounded-lg border border-slate-800 px-3 py-1.5 text-xs font-medium text-slate-400 transition hover:border-slate-700 hover:text-slate-200"
-            >
-              Sign out
-            </button>
-          </form>
+          <ThemeToggle />
         </div>
       </header>
 
       <main className="flex-1 pb-20 md:pb-0">{children}</main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-slate-800 bg-slate-950/95 backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-slate-200 bg-white/95 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-950/95">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const active = isActive(tab.href);
@@ -72,7 +83,7 @@ export default function NavShell({
               key={tab.href}
               href={tab.href}
               className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-medium ${
-                active ? "text-emerald-400" : "text-slate-500"
+                active ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500"
               }`}
             >
               <Icon className="h-5 w-5" />

@@ -1,15 +1,33 @@
 # Trading Assistant
 
 A PWA for quickly analyzing a stock for trading: market overview, sector
-trends, an interactive chart with moving averages, and a personal watchlist.
-Installable on both phone and laptop. Built entirely on free data sources —
-see [Architecture](#architecture) below.
+trends, an interactive chart with candle sizes from 1-minute to monthly, and a
+personal watchlist. Installable on both phone and laptop, light and dark mode.
+Built entirely on free data sources — see [Architecture](#architecture) below.
 
-This is **Phase 1** of the build: auth, the app shell, the home page (market +
-sectors + watchlist), and the stock page (search + chart). News, ratings,
-sentiment, the event calendar, and alerts/notifications come in later phases.
+## Local mode (default — no setup required)
 
-## Setup
+Out of the box, with no configuration, the app runs in **local mode**:
+there's no login, and your watchlist is saved in your browser's local
+storage. Just run it:
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) and go. No API keys
+needed — market data comes from Yahoo Finance's public chart endpoint, which
+requires no key.
+
+Local mode is meant to be swapped out for real accounts later (see below)
+whenever you're ready — nothing about it needs to be ripped out first.
+
+## Turning on real accounts (Supabase)
+
+Switching to real Supabase-backed accounts is opt-in: set the two env vars
+below and the app automatically switches from local mode to full auth +
+per-user watchlists, no code changes needed.
 
 ### 1. Create a free Supabase project
 
@@ -38,39 +56,41 @@ Go to [supabase.com](https://supabase.com), create a free project, then:
 cp .env.local.example .env.local
 ```
 
-Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from step 1.
-
-No other API keys are needed for Phase 1 — market data comes from Yahoo
-Finance's public chart endpoint, which requires no key.
-
-### 3. Run it
-
-```bash
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000), sign in with your email
-(you'll get a magic link), and you're in.
+Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from
+step 1, then restart the dev server. Sign-in, session handling, and the
+watchlist now go through Supabase instead of local storage; anything starred
+while in local mode does **not** carry over automatically (it's in the
+browser's local storage, not the account).
 
 ## Architecture
 
 - **Framework:** Next.js 16 (App Router), TypeScript, Tailwind CSS.
-- **Auth:** Supabase Auth, email magic links (no passwords). `src/proxy.ts`
-  (Next 16's renamed middleware) refreshes the session and gates every page
-  except `/login`.
+- **Auth:** Supabase Auth, email magic links (no passwords) — active only
+  when `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` are set
+  (`src/lib/supabase/config.ts`). `src/proxy.ts` (Next 16's renamed
+  middleware) refreshes the session and gates every page except `/login` in
+  that mode; it's a no-op in local mode.
+- **Watchlist:** `src/lib/watchlist-client.ts` abstracts storage — Supabase
+  Postgres with row-level security (`supabase/schema.sql`,
+  `src/app/api/watchlist/route.ts`) when configured, otherwise the browser's
+  `localStorage`.
 - **Data:** `src/lib/market/yahoo.ts` reads Yahoo Finance's unofficial,
   keyless `v8/finance/chart` endpoint for quotes and OHLCV history. Server
   fetches are cached for 5 minutes via Next's `fetch` cache
   (`next: { revalidate: 300 }`) so the free, rate-limited endpoint is only
   hit once per symbol per cache window — shared across every user, not
   once per user.
-- **Watchlist:** stored per-user in Supabase Postgres (`supabase/schema.sql`),
-  behind row-level security. `src/app/api/watchlist/route.ts` handles
-  add/remove.
 - **Chart:** [TradingView Lightweight Charts](https://github.com/tradingview/lightweight-charts)
-  (open-source, free) — candlesticks, volume, and 20/50/200-day moving
-  averages, all computed client-side from the OHLCV history.
+  (open-source, free) — candlesticks, volume, and 20/50/200-period moving
+  averages, all computed client-side from the OHLCV history. Candle size is
+  selectable from 1m up to monthly (`src/lib/market/timeframes.ts`); intraday
+  ranges are chosen to stay inside Yahoo's real per-interval history limits
+  (1m ≈ 7 days, 5m/15m/30m ≈ 60 days, 1h ≈ 2 years).
+- **Theme:** manual light/dark toggle (`src/components/ThemeToggle.tsx`)
+  persisted to `localStorage`, defaulting to system preference. Uses Next's
+  documented inline-script pattern to avoid a flash of the wrong theme on
+  load, and a Tailwind `@custom-variant` so `dark:` utilities key off a
+  `data-theme` attribute instead of only `prefers-color-scheme`.
 - **PWA:** `public/manifest.json` + `public/sw.js` (hand-rolled, no
   framework plugin) make the app installable on phone and laptop, with
   static-asset caching for offline resilience. Market/auth data is
@@ -79,6 +99,6 @@ Open [http://localhost:3000](http://localhost:3000), sign in with your email
 
 ## What's next
 
-See the phased roadmap discussed with the user: news, sentiment, analyst
-ratings, the event calendar, stock-vs-market/sector comparison, custom
-alerts + push notifications, and persisted chart drawings.
+Phase 2: news feed, sentiment, analyst ratings, the event calendar,
+stock-vs-market/sector comparison, custom alerts + push notifications, and
+persisted chart drawings.
