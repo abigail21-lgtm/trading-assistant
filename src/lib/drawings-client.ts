@@ -47,11 +47,12 @@ export async function addDrawing(symbol: string, timeframeKey: string, line: New
     return full;
   }
 
-  await fetch("/api/drawings", {
+  const res = await fetch("/api/drawings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ symbol, timeframe: timeframeKey, line: full }),
   });
+  if (!res.ok) throw new Error(`Failed to save trendline for ${symbol}`);
   return full;
 }
 
@@ -61,10 +62,11 @@ export async function removeDrawing(symbol: string, timeframeKey: string, id: st
     return;
   }
 
-  await fetch(
+  const res = await fetch(
     `/api/drawings?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframeKey)}&id=${encodeURIComponent(id)}`,
     { method: "DELETE" },
   );
+  if (!res.ok) throw new Error(`Failed to remove trendline ${id}`);
 }
 
 export async function clearDrawings(symbol: string, timeframeKey: string): Promise<void> {
@@ -73,7 +75,8 @@ export async function clearDrawings(symbol: string, timeframeKey: string): Promi
     return;
   }
 
-  await fetch(`/api/drawings?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframeKey)}`, {
+  const res = await fetch(`/api/drawings?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframeKey)}`, {
     method: "DELETE",
   });
+  if (!res.ok) throw new Error(`Failed to clear trendlines for ${symbol}`);
 }

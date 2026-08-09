@@ -35,11 +35,16 @@ export async function addToWatchlist(symbol: string): Promise<void> {
     return;
   }
 
-  await fetch("/api/watchlist", {
+  const res = await fetch("/api/watchlist", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ symbol }),
   });
+  // Callers (StarButton) revert their optimistic UI state on a thrown
+  // error -- without this check, a failed write (e.g. an RLS rejection)
+  // looked identical to a successful one, silently leaving the star "on"
+  // in the UI while nothing was actually saved.
+  if (!res.ok) throw new Error(`Failed to add ${symbol} to watchlist`);
 }
 
 export async function removeFromWatchlist(symbol: string): Promise<void> {
@@ -48,5 +53,6 @@ export async function removeFromWatchlist(symbol: string): Promise<void> {
     return;
   }
 
-  await fetch(`/api/watchlist?symbol=${encodeURIComponent(symbol)}`, { method: "DELETE" });
+  const res = await fetch(`/api/watchlist?symbol=${encodeURIComponent(symbol)}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Failed to remove ${symbol} from watchlist`);
 }

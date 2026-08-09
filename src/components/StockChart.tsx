@@ -153,12 +153,12 @@ export default function StockChart({
 
   async function handleClear() {
     setDrawings([]);
-    await clearDrawings(symbol, timeframeKey);
+    await clearDrawings(symbol, timeframeKey).catch(() => {});
   }
 
   async function handleRemoveLine(id: string) {
     setDrawings((prev) => prev.filter((l) => l.id !== id));
-    await removeDrawing(symbol, timeframeKey, id);
+    await removeDrawing(symbol, timeframeKey, id).catch(() => {});
   }
 
   // Creates the chart itself plus the candle/volume series -- only reruns
@@ -381,9 +381,14 @@ export default function StockChart({
         time2: param.time as string | number,
         price2: price,
       };
-      addDrawing(symbol, timeframeKey, newLine).then((saved) => {
-        setDrawings((prev) => [...prev, saved]);
-      });
+      addDrawing(symbol, timeframeKey, newLine)
+        .then((saved) => {
+          setDrawings((prev) => [...prev, saved]);
+        })
+        .catch(() => {
+          // Save failed -- leave the line undrawn rather than showing one
+          // that didn't actually persist.
+        });
     }
 
     chart.subscribeClick(handleClick);
@@ -481,8 +486,11 @@ export default function StockChart({
       </div>
       <div className="relative min-h-0 flex-1">
         <div ref={containerRef} className="h-full w-full" />
-        <span className="pointer-events-none absolute bottom-1 left-1 text-[10px] font-medium text-slate-400 dark:text-slate-600">
-          Volume
+        <span
+          className="pointer-events-none absolute bottom-1 left-1 text-[10px] font-medium text-slate-400 dark:text-slate-600"
+          title="Each bar is that period's trading volume. The number on the right edge is the most recent bar, not an average."
+        >
+          Volume (latest bar)
         </span>
       </div>
     </div>

@@ -43,11 +43,12 @@ export async function addAlert(rule: NewAlertRule): Promise<AlertRule> {
     return full;
   }
 
-  await fetch("/api/alerts", {
+  const res = await fetch("/api/alerts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(full),
   });
+  if (!res.ok) throw new Error(`Failed to save alert for ${full.symbol}`);
   return full;
 }
 
@@ -57,7 +58,8 @@ export async function removeAlert(id: string): Promise<void> {
     return;
   }
 
-  await fetch(`/api/alerts?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  const res = await fetch(`/api/alerts?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Failed to remove alert ${id}`);
 }
 
 export async function markAlertFired(id: string, firedAt: number): Promise<void> {
@@ -66,9 +68,10 @@ export async function markAlertFired(id: string, firedAt: number): Promise<void>
     return;
   }
 
-  await fetch("/api/alerts", {
+  const res = await fetch("/api/alerts", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, lastFiredAt: firedAt }),
   });
+  if (!res.ok) throw new Error(`Failed to update alert ${id}`);
 }

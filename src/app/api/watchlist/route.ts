@@ -45,9 +45,15 @@ export async function POST(request: Request) {
   const symbol = typeof body?.symbol === "string" ? body.symbol.trim().toUpperCase() : "";
   if (!symbol) return NextResponse.json({ error: "Missing symbol" }, { status: 400 });
 
+  // ignoreDuplicates -- ON CONFLICT DO NOTHING -- because plain upsert
+  // generates ON CONFLICT DO UPDATE, which needs an UPDATE policy that this
+  // table doesn't have (there's nothing to update here; the row either
+  // exists or it doesn't). Without this, re-starring a symbol whose row
+  // still exists silently fails RLS: the client never checked the response,
+  // so the star showed as "on" while nothing was actually written.
   const { error } = await supabase
     .from("watchlist")
-    .upsert({ user_id: user.id, symbol }, { onConflict: "user_id,symbol" });
+    .upsert({ user_id: user.id, symbol }, { onConflict: "user_id,symbol", ignoreDuplicates: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
