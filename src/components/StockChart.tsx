@@ -54,11 +54,13 @@ const PALETTES = {
     volUp: "#10b981b3",
     volDown: "#ef4444b3",
     drawLine: "#f472b6",
-    support: "#34d399",
-    // Was #fb923c (orange), too close to MA200's amber (#f59e0b) at a
-    // glance -- rose is a clearly different hue while staying in the same
-    // "warning/ceiling" semantic space.
-    resistance: "#fb7185",
+    // Support/resistance used to sit in the same green/red hue family as
+    // the candles themselves -- in light mode `support` was the literal
+    // same hex as `up`, which is exactly why the lines vanished into the
+    // candles they cross through. Moved to teal/fuchsia, a hue family
+    // nothing else on this chart uses.
+    support: "#2dd4bf",
+    resistance: "#e879f9",
   },
   light: {
     text: "#64748b",
@@ -69,8 +71,8 @@ const PALETTES = {
     volUp: "#059669b3",
     volDown: "#dc2626b3",
     drawLine: "#db2777",
-    support: "#059669",
-    resistance: "#e11d48",
+    support: "#0d9488",
+    resistance: "#a21caf",
   },
 } as const;
 
@@ -323,8 +325,11 @@ export default function StockChart({
           candleSeries.createPriceLine({
             price: level.price,
             color: level.type === "support" ? palette.support : palette.resistance,
-            lineWidth: 1,
-            lineStyle: LineStyle.Dotted,
+            // Was width 1 + Dotted -- thin enough to disappear behind
+            // candle wicks even with a distinct color; Dashed at width 2
+            // reads as a continuous line at a glance.
+            lineWidth: 2,
+            lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
             title: level.type === "support" ? "Support" : "Resistance",
           }),
