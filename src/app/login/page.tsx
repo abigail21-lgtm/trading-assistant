@@ -15,34 +15,56 @@ export default function LoginPage() {
   );
 }
 
+// A typed code rather than a clickable link deliberately: email providers'
+// click-tracking/link-scanning (Resend's included, via its underlying AWS
+// SES infrastructure) can auto-visit a magic link before the user's real
+// click, burning the single-use token. Nothing can auto-visit a code a
+// human has to read and type, so this sidesteps that whole class of
+// failure rather than working around one provider's specific behavior.
 function LoginForm() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") ?? "/";
-  const linkError = searchParams.get("error") === "invalid-link";
 
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [code, setCode] = useState("");
+  const [step, setStep] = useState<"email" | "code">("email");
+  const [status, setStatus] = useState<"idle" | "working" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSendCode(e: FormEvent) {
     e.preventDefault();
-    setStatus("sending");
+    setStatus("working");
     setErrorMessage("");
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent(redirectTo)}`,
-      },
-    });
+    const { error } = await supabase.auth.signInWithOtp({ email });
 
     if (error) {
       setStatus("error");
       setErrorMessage(error.message);
     } else {
-      setStatus("sent");
+      setStatus("idle");
+      setStep("code");
     }
+  }
+
+  async function handleVerifyCode(e: FormEvent) {
+    e.preventDefault();
+    setStatus("working");
+    setErrorMessage("");
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
+
+    if (error) {
+      setStatus("error");
+      setErrorMessage(error.message);
+      return;
+    }
+
+    // Full navigation (not router.push) so the server sees the
+    // just-written session cookie on the very next request.
+    window.location.href = redirectTo;
   }
 
   return (
@@ -63,43 +85,76 @@ function LoginForm() {
               Go to the app
             </Link>
           </>
-        ) : (
+        ) : step === "email" ? (
           <>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               Sign in with your email — no password needed.
             </p>
 
-            {status === "sent" ? (
-              <p className="mt-6 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                Check <span className="font-medium">{email}</span> for a sign-in link.
-              </p>
-            ) : (
-              <form onSubmit={handleSubmit} className="mt-6 space-y-3">
-                <input
-                  type="email"
-                  required
-                  autoFocus
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                />
-                <button
-                  type="submit"
-                  disabled={status === "sending"}
-                  className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-60"
-                >
-                  {status === "sending" ? "Sending…" : "Send magic link"}
-                </button>
-              </form>
-            )}
+            <form onSubmit={handleSendCode} className="mt-6 space-y-3">
+              <input
+                type="email"
+                required
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              />
+              <button
+                type="submit"
+                disabled={status === "working"}
+                className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-60"
+              >
+                {status === "working" ? "Sending…" : "Send code"}
+              </button>
+            </form>
 
-            {(status === "error" || linkError) && (
-              <p className="mt-4 text-sm text-red-500 dark:text-red-400">
-                {status === "error"
-                  ? errorMessage
-                  : "That sign-in link is invalid or expired. Request a new one."}
-              </p>
+            {status === "error" && (
+              <p className="mt-4 text-sm text-red-500 dark:text-red-400">{errorMessage}</p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Enter the 6-digit code sent to <span className="font-medium">{email}</span>.
+            </p>
+
+            <form onSubmit={handleVerifyCode} className="mt-6 space-y-3">
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+                autoFocus
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="123456"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-lg tracking-[0.4em] text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              />
+              <button
+                type="submit"
+                disabled={status === "working" || code.length !== 6}
+                className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-60"
+              >
+                {status === "working" ? "Verifying…" : "Verify"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep("email");
+                  setCode("");
+                  setStatus("idle");
+                  setErrorMessage("");
+                }}
+                className="w-full text-center text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+              >
+                Use a different email
+              </button>
+            </form>
+
+            {status === "error" && (
+              <p className="mt-4 text-sm text-red-500 dark:text-red-400">{errorMessage}</p>
             )}
           </>
         )}
