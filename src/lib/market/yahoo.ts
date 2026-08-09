@@ -60,6 +60,12 @@ async function fetchYahooChart(
       const res = await fetch(url, {
         headers: BROWSER_HEADERS,
         next: { revalidate: revalidateSeconds },
+        // Bounds how long a slow/hanging upstream host can stall the page --
+        // without this, one bad host blocks a serverless function until the
+        // platform kills it outright, which the browser shows as a raw
+        // network failure rather than a normal error page. Falls through to
+        // the next host on timeout instead of waiting indefinitely.
+        signal: AbortSignal.timeout(8000),
       });
       // Yahoo encodes "symbol not found" as a 404 with a JSON error body
       // (not just a bare non-2xx), so parse the body before giving up on

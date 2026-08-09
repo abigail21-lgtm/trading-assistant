@@ -19,7 +19,11 @@ export async function getSentiment(symbol: string): Promise<SentimentSummary | n
 
   let res: Response;
   try {
-    res = await fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: 1800 } });
+    res = await fetch(url, {
+      headers: BROWSER_HEADERS,
+      next: { revalidate: 1800 },
+      signal: AbortSignal.timeout(8000),
+    });
   } catch {
     return null;
   }

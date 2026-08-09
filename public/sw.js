@@ -36,7 +36,16 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => caches.match("/").then((res) => res ?? Response.error())),
+      fetch(request).catch(() =>
+        caches.match("/").then((res) =>
+          // Only serve the cached shell if it's a real, direct 200 response --
+          // e.g. never a cached redirect (this route can 307 to /login when
+          // signed out), which the browser can't render for a top-level
+          // navigation and fails with an opaque "page couldn't load" error
+          // that's worse than just letting the network error surface normally.
+          res && res.ok && res.type === "basic" ? res : Response.error(),
+        ),
+      ),
     );
     return;
   }
