@@ -21,6 +21,8 @@ import CollapsibleNewsSection from "@/components/CollapsibleNewsSection";
 import PriceAnalysisCard from "@/components/PriceAnalysisCard";
 import HistoricalVolatilityCard from "@/components/HistoricalVolatilityCard";
 import { computeHistoricalVolatility } from "@/lib/market/volatility";
+import ShortInterestCard from "@/components/ShortInterestCard";
+import { getShortInterestHistory, summarizeShortInterest } from "@/lib/market/short-interest";
 import AlertsPanel from "@/components/AlertsPanel";
 
 export default async function StockPage({
@@ -159,6 +161,9 @@ export default async function StockPage({
           <Suspense fallback={<CardSkeleton />}>
             <VolatilitySection symbol={symbol} />
           </Suspense>
+          <Suspense fallback={null}>
+            <ShortInterestSection symbol={symbol} />
+          </Suspense>
           <Suspense fallback={<CardSkeleton />}>
             <CompanyFactsSection symbol={symbol} currentPrice={quote.regularMarketPrice} currency={quote.currency} />
           </Suspense>
@@ -226,6 +231,11 @@ async function VolatilitySection({ symbol }: { symbol: string }) {
   const chart = await getChart(symbol, "6mo", "1d").catch(() => null);
   if (!chart) return null;
   return <HistoricalVolatilityCard windows={computeHistoricalVolatility(chart.candles)} />;
+}
+
+async function ShortInterestSection({ symbol }: { symbol: string }) {
+  const rows = await getShortInterestHistory(symbol).catch(() => []);
+  return <ShortInterestCard summary={summarizeShortInterest(rows)} />;
 }
 
 async function CompanyFactsSection({
