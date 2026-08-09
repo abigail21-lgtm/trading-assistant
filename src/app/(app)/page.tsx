@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getManyQuoteSummaries } from "@/lib/market/yahoo";
+import { getManyQuoteSummariesWithTrend } from "@/lib/market/yahoo";
 import { MAJOR_INDICES, SECTORS } from "@/lib/market/symbols";
 import { getSentiment } from "@/lib/market/sentiment";
 import { getMarketNews } from "@/lib/market/news";
@@ -15,8 +15,8 @@ export const revalidate = 300;
 
 export default async function HomePage() {
   const [indices, sectors, marketSentiment, marketNews] = await Promise.all([
-    getManyQuoteSummaries(MAJOR_INDICES),
-    getManyQuoteSummaries(SECTORS),
+    getManyQuoteSummariesWithTrend(MAJOR_INDICES),
+    getManyQuoteSummariesWithTrend(SECTORS),
     getSentiment("SPY").catch(() => null),
     getMarketNews().catch(() => []),
   ]);

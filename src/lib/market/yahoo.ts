@@ -1,5 +1,6 @@
 import type { SymbolInfo } from "./symbols";
 import { BROWSER_HEADERS } from "./http";
+import { computeTrendReturns, type TrendReturns } from "./comparison";
 
 // Unofficial, keyless Yahoo Finance endpoints. No auth required for chart data,
 // but Yahoo does rate-limit and occasionally blocks default fetch user agents,
@@ -182,6 +183,33 @@ export async function getManyQuoteSummaries(
     const r = settled[i];
     if (r.status === "fulfilled") {
       return { ...s, ...r.value, ok: true as const };
+    }
+    return { ...s, ok: false as const, error: String(r.reason?.message ?? r.reason) };
+  });
+}
+
+export type QuoteWithTrendResult =
+  | (SymbolInfo & QuoteSummary & TrendReturns & { ok: true })
+  | (SymbolInfo & { ok: false; error: string });
+
+/**
+ * Same as `getManyQuoteSummaries`, but pulls a 3-month daily chart per
+ * symbol instead of 5 days -- one fetch that covers both the latest quote
+ * (still derived the same way, from the last couple of candles) and
+ * 1-week/1-month/3-month trend returns, rather than a separate request per
+ * lookback window.
+ */
+export async function getManyQuoteSummariesWithTrend(
+  symbols: SymbolInfo[],
+  revalidateSeconds = 300,
+): Promise<QuoteWithTrendResult[]> {
+  const settled = await Promise.allSettled(
+    symbols.map((s) => getChart(s.symbol, "3mo", "1d", revalidateSeconds)),
+  );
+  return symbols.map((s, i) => {
+    const r = settled[i];
+    if (r.status === "fulfilled") {
+      return { ...s, ...r.value.meta, ...computeTrendReturns(r.value.candles), ok: true as const };
     }
     return { ...s, ok: false as const, error: String(r.reason?.message ?? r.reason) };
   });
