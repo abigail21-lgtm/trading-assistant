@@ -19,6 +19,8 @@ import UpcomingEarningsCard from "@/components/UpcomingEarningsCard";
 import EarningsProximityBanner from "@/components/EarningsProximityBanner";
 import CollapsibleNewsSection from "@/components/CollapsibleNewsSection";
 import PriceAnalysisCard from "@/components/PriceAnalysisCard";
+import HistoricalVolatilityCard from "@/components/HistoricalVolatilityCard";
+import { computeHistoricalVolatility } from "@/lib/market/volatility";
 import AlertsPanel from "@/components/AlertsPanel";
 
 export default async function StockPage({
@@ -155,6 +157,9 @@ export default async function StockPage({
             <ComparisonSection symbol={symbol} timeframe={timeframe} candles={candles} />
           </Suspense>
           <Suspense fallback={<CardSkeleton />}>
+            <VolatilitySection symbol={symbol} />
+          </Suspense>
+          <Suspense fallback={<CardSkeleton />}>
             <CompanyFactsSection symbol={symbol} currentPrice={quote.regularMarketPrice} currency={quote.currency} />
           </Suspense>
           <Suspense fallback={<CardSkeleton />}>
@@ -213,6 +218,14 @@ async function ComparisonSection({
       periodLabel={rangeLabel(timeframe.range)}
     />
   );
+}
+
+async function VolatilitySection({ symbol }: { symbol: string }) {
+  // Always daily candles here regardless of the chart's selected timeframe —
+  // annualizing from anything other than daily returns wouldn't be meaningful.
+  const chart = await getChart(symbol, "6mo", "1d").catch(() => null);
+  if (!chart) return null;
+  return <HistoricalVolatilityCard windows={computeHistoricalVolatility(chart.candles)} />;
 }
 
 async function CompanyFactsSection({
