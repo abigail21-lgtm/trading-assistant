@@ -117,7 +117,7 @@ function LoginForm() {
         ) : (
           <>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              Enter the 6-digit code sent to <span className="font-medium">{email}</span>.
+              Enter the code sent to <span className="font-medium">{email}</span>.
             </p>
 
             <form onSubmit={handleVerifyCode} className="mt-6 space-y-3">
@@ -128,13 +128,13 @@ function LoginForm() {
                 required
                 autoFocus
                 value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="123456"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-lg tracking-[0.4em] text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                placeholder="Code"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-lg tracking-[0.3em] text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
               <button
                 type="submit"
-                disabled={status === "working" || code.length !== 6}
+                disabled={status === "working" || code.length < 6}
                 className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-60"
               >
                 {status === "working" ? "Verifying…" : "Verify"}
