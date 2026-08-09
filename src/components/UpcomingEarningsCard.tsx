@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { EarningsEvent } from "@/lib/market/calendar";
+import { daysUntil, earningsDateToUnix, EARNINGS_PROXIMITY_DAYS } from "@/lib/market/calendar";
 import { formatDate } from "@/lib/format";
 import CollapsibleCardShell from "./CollapsibleCardShell";
 
@@ -13,6 +14,7 @@ const TIME_LABELS: Record<string, string> = {
 
 export default function UpcomingEarningsCard({ event }: { event: EarningsEvent | null }) {
   const [open, setOpen] = useState(false);
+  const soon = event != null && daysUntil(event.date) <= EARNINGS_PROXIMITY_DAYS;
 
   return (
     <CollapsibleCardShell
@@ -20,8 +22,16 @@ export default function UpcomingEarningsCard({ event }: { event: EarningsEvent |
       open={open}
       onToggle={() => setOpen((v) => !v)}
       summary={
-        <span className={event ? "font-medium text-slate-900 dark:text-slate-100" : "text-slate-500"}>
-          {event ? formatDate(dateToUnix(event.date)) : "No date yet"}
+        <span
+          className={
+            soon
+              ? "font-medium text-amber-600 dark:text-amber-400"
+              : event
+                ? "font-medium text-slate-900 dark:text-slate-100"
+                : "text-slate-500"
+          }
+        >
+          {event ? formatDate(earningsDateToUnix(event.date)) : "No date yet"}
         </span>
       }
     >
@@ -37,8 +47,4 @@ export default function UpcomingEarningsCard({ event }: { event: EarningsEvent |
       )}
     </CollapsibleCardShell>
   );
-}
-
-function dateToUnix(dateStr: string): number {
-  return Math.floor(new Date(`${dateStr}T00:00:00Z`).getTime() / 1000);
 }

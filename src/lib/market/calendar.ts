@@ -71,6 +71,25 @@ export async function getEarningsCalendar(): Promise<EarningsEvent[]> {
   return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 }
 
+// Threshold for flagging earnings as "close" — options priced now can
+// reprice sharply once IV crushes after the print, so this is meant to
+// catch trades that would run into that.
+export const EARNINGS_PROXIMITY_DAYS = 5;
+
+export function earningsDateToUnix(dateStr: string): number {
+  return Math.floor(new Date(`${dateStr}T00:00:00Z`).getTime() / 1000);
+}
+
+/** Integer calendar days from today (UTC) to the given date, ignoring
+ * time-of-day so it doesn't drift as the current day progresses. */
+export function daysUntil(dateStr: string): number {
+  const msPerDay = 86_400_000;
+  const now = new Date();
+  const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const targetUTC = new Date(`${dateStr}T00:00:00Z`).getTime();
+  return Math.round((targetUTC - todayUTC) / msPerDay);
+}
+
 export async function getNextEarnings(symbol: string): Promise<EarningsEvent | null> {
   const all = await getEarningsCalendar();
   const upper = symbol.toUpperCase();

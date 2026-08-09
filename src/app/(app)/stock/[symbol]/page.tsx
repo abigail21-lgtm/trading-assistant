@@ -16,6 +16,7 @@ import PerformanceComparisonCard from "@/components/PerformanceComparisonCard";
 import CompanyFactsCard from "@/components/CompanyFactsCard";
 import SentimentCard from "@/components/SentimentCard";
 import UpcomingEarningsCard from "@/components/UpcomingEarningsCard";
+import EarningsProximityBanner from "@/components/EarningsProximityBanner";
 import CollapsibleNewsSection from "@/components/CollapsibleNewsSection";
 import PriceAnalysisCard from "@/components/PriceAnalysisCard";
 import AlertsPanel from "@/components/AlertsPanel";
@@ -109,6 +110,10 @@ export default async function StockPage({
         <Stat label="Volume" value={formatCompactNumber(quote.regularMarketVolume)} />
         <Stat label="Previous Close" value={formatPrice(quote.previousClose, quote.currency)} />
       </dl>
+
+      <Suspense fallback={null}>
+        <EarningsBannerSection symbol={symbol} />
+      </Suspense>
 
       {/* On mobile this is a single column following DOM order: chart, then
           the at-a-glance sidebar cards, then news. At lg+, explicit grid
@@ -238,6 +243,11 @@ async function SentimentSection({ symbol }: { symbol: string }) {
 async function NextEarningsSection({ symbol }: { symbol: string }) {
   const event = await getNextEarnings(symbol).catch(() => null);
   return <UpcomingEarningsCard event={event} />;
+}
+
+async function EarningsBannerSection({ symbol }: { symbol: string }) {
+  const event = await getNextEarnings(symbol).catch(() => null);
+  return <EarningsProximityBanner event={event} />;
 }
 
 async function NewsSection({ symbol }: { symbol: string }) {
