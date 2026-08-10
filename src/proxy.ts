@@ -34,9 +34,26 @@ export async function proxy(request: NextRequest) {
   // Refreshes the auth token if needed; required so server components see a
   // valid session. Do not remove or add logic between client creation and
   // this call, per Supabase's SSR guidance.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  //
+  // This runs on every navigation (this proxy isn't excluded for page
+  // routes), and Next's own docs warn proxy/middleware "is not intended for
+  // slow data fetching" and shouldn't be relied on as a full auth solution.
+  // A transient hiccup reaching Supabase's auth server here used to throw
+  // unhandled and crash the whole request at the edge, which surfaces to the
+  // browser as a hard "failed to fetch" / "page couldn't load" rather than a
+  // normal error page -- for every page, on every account, since this path
+  // runs unconditionally. Fail open instead: every protected API route and
+  // page already does its own getUser() check server-side (backed by RLS),
+  // so skipping the redirect on a transient failure here doesn't weaken
+  // security, it just avoids taking down navigation over a flaky auth-refresh
+  // call.
+  let user = null;
+  try {
+    const result = await supabase.auth.getUser();
+    user = result.data.user;
+  } catch {
+    return supabaseResponse;
+  }
 
   const { pathname } = request.nextUrl;
   const isApiRoute = pathname.startsWith("/api");
