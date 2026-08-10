@@ -4,6 +4,15 @@
 -- idempotent: tables use `create table if not exists`, and policies are
 -- dropped and recreated rather than just `create policy`, since Postgres
 -- has no `create policy if not exists`.
+--
+-- Row-level security policies only decide *which rows* a role can see once
+-- it already has base access to the table -- they don't grant that base
+-- access themselves. Without the `grant` statements below, every query
+-- from the app (running as the `authenticated` role) fails outright with
+-- "permission denied for table ..." before RLS is ever evaluated, even
+-- though every policy is correct. Re-running this file adds the missing
+-- grants if your project doesn't already have them.
+grant usage on schema public to authenticated;
 
 create table if not exists public.watchlist (
   id uuid primary key default gen_random_uuid(),
@@ -14,6 +23,7 @@ create table if not exists public.watchlist (
 );
 
 alter table public.watchlist enable row level security;
+grant select, insert, delete on public.watchlist to authenticated;
 
 drop policy if exists "Users can view their own watchlist" on public.watchlist;
 create policy "Users can view their own watchlist"
@@ -44,6 +54,7 @@ create table if not exists public.alerts (
 );
 
 alter table public.alerts enable row level security;
+grant select, insert, update, delete on public.alerts to authenticated;
 
 drop policy if exists "Users can view their own alerts" on public.alerts;
 create policy "Users can view their own alerts"
@@ -78,6 +89,7 @@ create table if not exists public.drawings (
 );
 
 alter table public.drawings enable row level security;
+grant select, insert, delete on public.drawings to authenticated;
 
 drop policy if exists "Users can view their own drawings" on public.drawings;
 create policy "Users can view their own drawings"
@@ -109,6 +121,7 @@ create table if not exists public.push_subscriptions (
 );
 
 alter table public.push_subscriptions enable row level security;
+grant select, insert, delete on public.push_subscriptions to authenticated;
 
 drop policy if exists "Users can view their own push subscriptions" on public.push_subscriptions;
 create policy "Users can view their own push subscriptions"
