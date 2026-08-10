@@ -76,6 +76,8 @@ const PALETTES = {
   },
 } as const;
 
+type DrawStage = "idle" | "choosing" | "trend" | "support" | "resistance";
+
 export default function StockChart({
   candles,
   intraday = false,
@@ -93,13 +95,13 @@ export default function StockChart({
   const theme = useDomTheme();
 
   const [drawings, setDrawings] = useState<TrendLine[]>([]);
-  // "choosing": the two-option prompt is showing, after clicking "Draw
-  // line" but before picking trend vs. horizontal. "trend" is the existing
-  // two-click sloped line; "horizontal" completes on a single click, for a
-  // user-marked support/resistance level.
-  const [drawStage, setDrawStage] = useState<"idle" | "choosing" | "trend" | "horizontal">("idle");
+  // "choosing": the option prompt is showing, after clicking "Draw line" but
+  // before picking a mode. "trend" is the two-click sloped line; "support"
+  // and "resistance" each complete on a single click, for a user-marked
+  // horizontal level explicitly labeled as one or the other.
+  const [drawStage, setDrawStage] = useState<DrawStage>("idle");
   const [hasPendingPoint, setHasPendingPoint] = useState(false);
-  const drawStageRef = useRef<"idle" | "choosing" | "trend" | "horizontal">("idle");
+  const drawStageRef = useRef<DrawStage>("idle");
   const pendingPointRef = useRef<{ time: Time; price: number; capturedAtMs: number } | null>(null);
 
   const [visibleMAs, setVisibleMAs] = useState<Set<number>>(new Set([20, 50, 200]));
@@ -152,9 +154,14 @@ export default function StockChart({
     setHasPendingPoint(false);
   }
 
-  function chooseHorizontal() {
-    drawStageRef.current = "horizontal";
-    setDrawStage("horizontal");
+  function chooseSupport() {
+    drawStageRef.current = "support";
+    setDrawStage("support");
+  }
+
+  function chooseResistance() {
+    drawStageRef.current = "resistance";
+    setDrawStage("resistance");
   }
 
   function cancelDraw() {
@@ -297,8 +304,8 @@ export default function StockChart({
 
   // Layers saved lines on top -- adding/removing one no longer rebuilds the
   // whole chart. Two kinds: two-point "trend" lines (a LineSeries between
-  // the two points) and one-point "horizontal" lines (a full-width price
-  // line, same mechanism as the automatic S/R levels below).
+  // the two points) and one-point "support"/"resistance" lines (a full-width
+  // price line, same mechanism as the automatic S/R levels below).
   useEffect(() => {
     const candleSeries = candleSeriesRef.current;
     if (!chart || !candleSeries) return;
@@ -307,15 +314,15 @@ export default function StockChart({
     const addedPriceLines: ReturnType<ISeriesApi<"Candlestick">["createPriceLine"]>[] = [];
 
     for (const line of drawings) {
-      if (line.type === "horizontal") {
+      if (line.type === "support" || line.type === "resistance") {
         addedPriceLines.push(
           candleSeries.createPriceLine({
             price: line.price1,
-            color: palette.drawLine,
+            color: line.type === "support" ? palette.support : palette.resistance,
             lineWidth: 2,
             lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
-            title: "S/R (yours)",
+            title: line.type === "support" ? "Support (yours)" : "Resistance (yours)",
           }),
         );
         continue;
@@ -391,16 +398,17 @@ export default function StockChart({
 
     function handleClick(param: MouseEventParams<Time>) {
       const stage = drawStageRef.current;
-      if ((stage !== "trend" && stage !== "horizontal") || !param.point || param.time == null || !candleSeries) return;
+      const isSingleClickMode = stage === "support" || stage === "resistance";
+      if ((stage !== "trend" && !isSingleClickMode) || !param.point || param.time == null || !candleSeries) return;
       const price = candleSeries.coordinateToPrice(param.point.y);
       if (price == null) return;
 
-      if (stage === "horizontal") {
+      if (isSingleClickMode) {
         // Completes on a single click -- no second point needed.
         drawStageRef.current = "idle";
         setDrawStage("idle");
         const newLine: NewTrendLine = {
-          type: "horizontal",
+          type: stage,
           time1: param.time as string | number,
           price1: price,
           time2: param.time as string | number,
@@ -495,10 +503,17 @@ export default function StockChart({
               </button>
               <button
                 type="button"
-                onClick={chooseHorizontal}
+                onClick={chooseSupport}
                 className="rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 transition hover:border-emerald-500 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-500 dark:hover:text-emerald-400"
               >
-                Support/Resistance (1 point)
+                Support line (1 point)
+              </button>
+              <button
+                type="button"
+                onClick={chooseResistance}
+                className="rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 transition hover:border-emerald-500 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-emerald-500 dark:hover:text-emerald-400"
+              >
+                Resistance line (1 point)
               </button>
               <button
                 type="button"
@@ -509,23 +524,29 @@ export default function StockChart({
               </button>
             </>
           )}
-          {(drawStage === "trend" || drawStage === "horizontal") && (
+          {(drawStage === "trend" || drawStage === "support" || drawStage === "resistance") && (
             <button
               type="button"
               onClick={cancelDraw}
               className="rounded-md bg-emerald-600 px-2 py-1 font-medium text-white transition"
             >
-              {drawStage === "horizontal"
-                ? "Click a price…"
-                : hasPendingPoint
-                  ? "Click end point…"
-                  : "Click start point…"}
+              {drawStage === "support"
+                ? "Click a support price…"
+                : drawStage === "resistance"
+                  ? "Click a resistance price…"
+                  : hasPendingPoint
+                    ? "Click end point…"
+                    : "Click start point…"}
             </button>
           )}
           {drawings.map((line) => {
-            const isHorizontal = line.type === "horizontal";
-            const delta = isHorizontal ? null : lineDeltaPercent(line);
-            const label = isHorizontal ? formatPrice(line.price1) : delta != null ? formatPercent(delta) : "Line";
+            const isLevel = line.type === "support" || line.type === "resistance";
+            const delta = isLevel ? null : lineDeltaPercent(line);
+            const label = isLevel
+              ? `${line.type === "support" ? "Support" : "Resistance"} ${formatPrice(line.price1)}`
+              : delta != null
+                ? formatPercent(delta)
+                : "Line";
             return (
               <span
                 key={line.id}
@@ -535,7 +556,7 @@ export default function StockChart({
                 <button
                   type="button"
                   onClick={() => handleRemoveLine(line.id)}
-                  aria-label={isHorizontal ? "Remove this level" : "Remove this trendline"}
+                  aria-label={isLevel ? "Remove this level" : "Remove this trendline"}
                   className="rounded p-0.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3 w-3">
