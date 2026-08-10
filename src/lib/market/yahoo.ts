@@ -1,5 +1,5 @@
 import type { SymbolInfo } from "./symbols";
-import { BROWSER_HEADERS } from "./http";
+import { BROWSER_HEADERS, timeoutSignal } from "./http";
 import { computeTrendReturns, type TrendReturns } from "./comparison";
 
 // Unofficial, keyless Yahoo Finance endpoints. No auth required for chart data,
@@ -65,7 +65,7 @@ async function fetchYahooChart(
         // platform kills it outright, which the browser shows as a raw
         // network failure rather than a normal error page. Falls through to
         // the next host on timeout instead of waiting indefinitely.
-        signal: AbortSignal.timeout(8000),
+        signal: timeoutSignal(8000),
       });
       // Yahoo encodes "symbol not found" as a 404 with a JSON error body
       // (not just a bare non-2xx), so parse the body before giving up on

@@ -13,3 +13,17 @@ export const SEC_HEADERS = {
   "User-Agent": "MarketDesk (personal project; contact: abigailbowes21@gmail.com)",
   Accept: "application/json",
 };
+
+/**
+ * An AbortSignal that fires after `ms` milliseconds, for bounding how long a
+ * fetch to one of these free upstream sources can hang. Built from a plain
+ * AbortController + setTimeout rather than the native `AbortSignal.timeout`
+ * (Node 17.3+) -- this codebase can't confirm which Node version Netlify's
+ * deployed function runtime actually uses, and this version works
+ * identically everywhere with no compatibility risk.
+ */
+export function timeoutSignal(ms: number): AbortSignal {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}

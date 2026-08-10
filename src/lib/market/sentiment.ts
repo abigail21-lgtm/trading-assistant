@@ -1,4 +1,4 @@
-import { BROWSER_HEADERS } from "./http";
+import { BROWSER_HEADERS, timeoutSignal } from "./http";
 
 export interface SentimentSummary {
   symbol: string;
@@ -22,7 +22,7 @@ export async function getSentiment(symbol: string): Promise<SentimentSummary | n
     res = await fetch(url, {
       headers: BROWSER_HEADERS,
       next: { revalidate: 1800 },
-      signal: AbortSignal.timeout(8000),
+      signal: timeoutSignal(8000),
     });
   } catch {
     return null;

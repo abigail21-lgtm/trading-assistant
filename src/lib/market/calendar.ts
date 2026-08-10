@@ -1,4 +1,4 @@
-import { BROWSER_HEADERS } from "./http";
+import { BROWSER_HEADERS, timeoutSignal } from "./http";
 
 export interface EarningsEvent {
   symbol: string;
@@ -31,7 +31,7 @@ async function fetchEarningsForDate(dateStr: string): Promise<EarningsEvent[]> {
     // Promise.allSettled, which only resolves once every one of them
     // settles -- a single hanging date with no timeout blocks the entire
     // earnings calendar, and everything awaiting it, indefinitely.
-    res = await fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: 21600 }, signal: AbortSignal.timeout(6000) });
+    res = await fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: 21600 }, signal: timeoutSignal(6000) });
   } catch {
     return [];
   }

@@ -1,4 +1,4 @@
-import { BROWSER_HEADERS } from "./http";
+import { BROWSER_HEADERS, timeoutSignal } from "./http";
 
 export type HeadlineTone = "bullish" | "bearish" | "neutral";
 
@@ -72,7 +72,7 @@ async function fetchNewsSummaries(symbols: string, revalidateSeconds: number): P
     const res = await fetch(url, {
       headers: BROWSER_HEADERS,
       next: { revalidate: revalidateSeconds },
-      signal: AbortSignal.timeout(6000),
+      signal: timeoutSignal(6000),
     });
     if (!res.ok) return map;
     const xml = await res.text();

@@ -1,4 +1,4 @@
-import { BROWSER_HEADERS } from "./http";
+import { BROWSER_HEADERS, timeoutSignal } from "./http";
 
 // Best-effort, free consensus data from Nasdaq's public (keyless) site API.
 // This is NOT a per-analyst ratings breakdown (buy/hold/sell counts, named
@@ -34,7 +34,7 @@ export async function getCompanyFacts(
 
   let res: Response;
   try {
-    res = await fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: revalidateSeconds }, signal: AbortSignal.timeout(8000) });
+    res = await fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: revalidateSeconds }, signal: timeoutSignal(8000) });
   } catch {
     return null;
   }
