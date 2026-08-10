@@ -38,18 +38,25 @@ export async function proxy(request: NextRequest) {
   // This runs on every navigation (this proxy isn't excluded for page
   // routes), and Next's own docs warn proxy/middleware "is not intended for
   // slow data fetching" and shouldn't be relied on as a full auth solution.
-  // A transient hiccup reaching Supabase's auth server here used to throw
-  // unhandled and crash the whole request at the edge, which surfaces to the
-  // browser as a hard "failed to fetch" / "page couldn't load" rather than a
-  // normal error page -- for every page, on every account, since this path
-  // runs unconditionally. Fail open instead: every protected API route and
-  // page already does its own getUser() check server-side (backed by RLS),
-  // so skipping the redirect on a transient failure here doesn't weaken
-  // security, it just avoids taking down navigation over a flaky auth-refresh
-  // call.
+  // A hiccup reaching Supabase's auth server here used to throw unhandled
+  // (or simply hang past whatever the edge runtime's execution limit is) and
+  // crash the whole request, which surfaces to the browser as a hard "failed
+  // to fetch" / "page couldn't load" rather than a normal error page -- for
+  // every page, on every account, since this path runs unconditionally.
+  // Bound it with a timeout in addition to the try/catch: a plain catch
+  // only handles the call rejecting, not it hanging indefinitely, and this
+  // proxy runs on the Edge runtime -- a different network path from the
+  // Node-based API routes/pages that also call Supabase and have been fine.
+  // Fail open on either failure mode: every protected API route and page
+  // already does its own getUser() check server-side (backed by RLS), so
+  // skipping the redirect here doesn't weaken security, it just stops a
+  // flaky or slow auth-refresh call from taking down navigation entirely.
   let user = null;
   try {
-    const result = await supabase.auth.getUser();
+    const result = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("auth refresh timed out")), 4000)),
+    ]);
     user = result.data.user;
   } catch {
     return supabaseResponse;
