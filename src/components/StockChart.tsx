@@ -305,7 +305,23 @@ export default function StockChart({
     }
 
     return () => {
-      for (const series of added) chart.removeSeries(series);
+      // On a timeframe switch, candles/intraday/symbol/timeframeKey all
+      // change in the same commit as the chart-creation effect above, whose
+      // cleanup disposes the whole chart (newChart.remove()). React runs
+      // effect cleanups in declaration order, so that cleanup can run before
+      // this one and leave `chart` already disposed here -- calling
+      // removeSeries on it then throws "Object is disposed" from inside
+      // lightweight-charts, which (thrown from a commit-phase effect
+      // cleanup) was aborting the in-progress page transition. The disposed
+      // chart already discarded every series it owned, so there's nothing
+      // left to clean up in that case -- safe to just skip it.
+      for (const series of added) {
+        try {
+          chart.removeSeries(series);
+        } catch {
+          // Chart already disposed by a sibling effect's cleanup this commit.
+        }
+      }
     };
   }, [chart, candles, intraday, visibleMAs]);
 
@@ -359,8 +375,22 @@ export default function StockChart({
     }
 
     return () => {
-      for (const series of addedSeries) chart.removeSeries(series);
-      for (const priceLine of addedPriceLines) candleSeries.removePriceLine(priceLine);
+      // See the same guard in the moving-average effect above -- the chart
+      // may already be disposed by the time this runs.
+      for (const series of addedSeries) {
+        try {
+          chart.removeSeries(series);
+        } catch {
+          // Chart already disposed by a sibling effect's cleanup this commit.
+        }
+      }
+      for (const priceLine of addedPriceLines) {
+        try {
+          candleSeries.removePriceLine(priceLine);
+        } catch {
+          // Chart already disposed by a sibling effect's cleanup this commit.
+        }
+      }
     };
   }, [chart, drawings, theme]);
 
@@ -391,7 +421,15 @@ export default function StockChart({
     }
 
     return () => {
-      for (const line of added) candleSeries.removePriceLine(line);
+      // See the same guard in the moving-average effect above -- the chart
+      // may already be disposed by the time this runs.
+      for (const line of added) {
+        try {
+          candleSeries.removePriceLine(line);
+        } catch {
+          // Chart already disposed by a sibling effect's cleanup this commit.
+        }
+      }
     };
   }, [chart, levels, showLevels, theme]);
 
