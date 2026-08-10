@@ -256,7 +256,13 @@ export default function StockChart({
     newChart.timeScale().fitContent();
     candleSeriesRef.current = candleSeries;
 
+    // disconnect() doesn't cancel a resize notification the browser already
+    // queued -- switching timeframes, backgrounding the tab, or navigating
+    // away right as one fires can still run this callback after newChart.remove()
+    // below, throwing "Object is disposed" from inside the charting library.
+    let disposed = false;
     const resizeObserver = new ResizeObserver((entries) => {
+      if (disposed) return;
       const entry = entries[0];
       if (entry) newChart.applyOptions({ width: entry.contentRect.width });
     });
@@ -265,6 +271,7 @@ export default function StockChart({
     setChart(newChart);
 
     return () => {
+      disposed = true;
       resizeObserver.disconnect();
       candleSeriesRef.current = null;
       setChart(null);

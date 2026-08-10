@@ -50,18 +50,27 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static assets (Next build output, icons): cache-first.
+  // Static assets (Next build output, icons): cache-first. The network
+  // fetch has no fallback below it, so a real network failure (e.g. the
+  // connection dropping as the tab is backgrounded on mobile, or briefly
+  // when switching apps) used to reject this whole respondWith promise
+  // uncaught -- the browser then reports that resource load as a hard
+  // "network error" instead of quietly falling through. Catch it and fall
+  // back to a cached shell asset if we have one, otherwise let the error
+  // surface as a normal failed response rather than an unhandled rejection.
   event.respondWith(
     caches.match(request).then(
       (cached) =>
         cached ??
-        fetch(request).then((res) => {
-          if (res.ok) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          }
-          return res;
-        }),
+        fetch(request)
+          .then((res) => {
+            if (res.ok) {
+              const clone = res.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+            }
+            return res;
+          })
+          .catch(() => caches.match(request).then((res) => res ?? Response.error())),
     ),
   );
 });

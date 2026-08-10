@@ -18,7 +18,14 @@ export const TIMEFRAMES: Timeframe[] = [
   { key: "1h", label: "1h", range: "6mo", interval: "60m", intraday: true },
   { key: "1d", label: "D", range: "1y", interval: "1d", intraday: false },
   { key: "1wk", label: "W", range: "5y", interval: "1wk", intraday: false },
-  { key: "1mo", label: "M", range: "max", interval: "1mo", intraday: false },
+  // key is "monthly" (candle size), not "1mo" -- "1mo" is used elsewhere in
+  // this codebase (e.g. compare.ts, the sector page) to mean an actual
+  // 1-month lookback, and reusing it here for "monthly candles over max
+  // history" produced a `?tf=1mo` URL that reads as "1 month" but actually
+  // spans a stock's entire trading history -- the direct cause of the
+  // performance card showing e.g. a 5000% return for what looked like a
+  // 1-month view.
+  { key: "monthly", label: "M", range: "max", interval: "1mo", intraday: false },
 ];
 
 export const DEFAULT_TIMEFRAME_KEY = "1d";
