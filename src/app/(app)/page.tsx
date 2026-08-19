@@ -11,8 +11,6 @@ import AlertsOverview from "@/components/AlertsOverview";
 import CollapsibleNewsSection from "@/components/CollapsibleNewsSection";
 import { SentimentBadge } from "@/components/SentimentCard";
 
-export const revalidate = 300;
-
 export default async function HomePage() {
   const [indices, sectors, marketSentiment, marketNews] = await Promise.all([
     getManyQuoteSummariesWithTrend(MAJOR_INDICES),

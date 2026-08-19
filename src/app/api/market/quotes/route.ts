@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { getManyQuoteSummaries } from "@/lib/market/yahoo";
 
-export const revalidate = 300;
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const raw = searchParams.get("symbols") ?? "";

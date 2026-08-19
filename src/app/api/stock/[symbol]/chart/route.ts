@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { getChart, SymbolNotFoundError } from "@/lib/market/yahoo";
 import { TIMEFRAMES, DEFAULT_TIMEFRAME_KEY } from "@/lib/market/timeframes";
 
-export const revalidate = 300;
-
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ symbol: string }> },

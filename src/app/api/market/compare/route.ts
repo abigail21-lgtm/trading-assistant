@@ -8,8 +8,6 @@ import {
   type CompareSeries,
 } from "@/lib/market/compare";
 
-export const revalidate = 300;
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const rangeKey = searchParams.get("range") ?? "6mo";

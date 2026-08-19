@@ -47,19 +47,22 @@ export class SymbolNotFoundError extends Error {
   }
 }
 
-async function fetchYahooChart(
-  symbol: string,
-  range: string,
-  interval: string,
-  revalidateSeconds: number,
-) {
+async function fetchYahooChart(symbol: string, range: string, interval: string) {
   let lastError: unknown;
   for (const host of YAHOO_HOSTS) {
     try {
       const url = `https://${host}/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=false`;
       const res = await fetch(url, {
         headers: BROWSER_HEADERS,
-        next: { revalidate: revalidateSeconds },
+        // Deliberately no `next: { revalidate }` here -- this is live price
+        // data, and Netlify's implementation of Next's fetch-level Data
+        // Cache was observed getting stuck serving a week-old cached
+        // response for every candle/timeframe on a symbol, well past
+        // whatever revalidate window was set, with no indication anything
+        // was wrong. `no-store` costs an extra round-trip to Yahoo per
+        // request instead of reusing a cached one, but for a personal-scale
+        // app that's a much better trade than silently stale prices.
+        cache: "no-store",
         // Bounds how long a slow/hanging upstream host can stall the page --
         // without this, one bad host blocks a serverless function until the
         // platform kills it outright, which the browser shows as a raw
@@ -106,9 +109,8 @@ export async function getChart(
   symbol: string,
   range = "6mo",
   interval = "1d",
-  revalidateSeconds = 300,
 ): Promise<ChartResult> {
-  const result = await fetchYahooChart(symbol, range, interval, revalidateSeconds);
+  const result = await fetchYahooChart(symbol, range, interval);
   const meta = result.meta ?? {};
   const timestamps: number[] = result.timestamp ?? [];
   const quote = result.indicators?.quote?.[0] ?? {};
@@ -166,11 +168,8 @@ export async function getChart(
   };
 }
 
-export async function getQuoteSummary(
-  symbol: string,
-  revalidateSeconds = 300,
-): Promise<QuoteSummary> {
-  const { meta } = await getChart(symbol, "5d", "1d", revalidateSeconds);
+export async function getQuoteSummary(symbol: string): Promise<QuoteSummary> {
+  const { meta } = await getChart(symbol, "5d", "1d");
   return meta;
 }
 
@@ -178,13 +177,8 @@ export type QuoteResult =
   | (SymbolInfo & QuoteSummary & { ok: true })
   | (SymbolInfo & { ok: false; error: string });
 
-export async function getManyQuoteSummaries(
-  symbols: SymbolInfo[],
-  revalidateSeconds = 300,
-): Promise<QuoteResult[]> {
-  const settled = await Promise.allSettled(
-    symbols.map((s) => getQuoteSummary(s.symbol, revalidateSeconds)),
-  );
+export async function getManyQuoteSummaries(symbols: SymbolInfo[]): Promise<QuoteResult[]> {
+  const settled = await Promise.allSettled(symbols.map((s) => getQuoteSummary(s.symbol)));
   return symbols.map((s, i) => {
     const r = settled[i];
     if (r.status === "fulfilled") {
@@ -207,11 +201,8 @@ export type QuoteWithTrendResult =
  */
 export async function getManyQuoteSummariesWithTrend(
   symbols: SymbolInfo[],
-  revalidateSeconds = 300,
 ): Promise<QuoteWithTrendResult[]> {
-  const settled = await Promise.allSettled(
-    symbols.map((s) => getChart(s.symbol, "3mo", "1d", revalidateSeconds)),
-  );
+  const settled = await Promise.allSettled(symbols.map((s) => getChart(s.symbol, "3mo", "1d")));
   return symbols.map((s, i) => {
     const r = settled[i];
     if (r.status === "fulfilled") {
