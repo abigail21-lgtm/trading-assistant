@@ -167,3 +167,9 @@ drop policy if exists "Users can update their own settings" on public.user_setti
 create policy "Users can update their own settings"
   on public.user_settings for update
   using (auth.uid() = user_id);
+
+-- Imported Robinhood activity for "My trades" (src/lib/journal). Only the
+-- parsed transaction rows are stored (date, code, symbol, description,
+-- quantity, price, amount); the uploaded file itself never leaves the
+-- browser.
+alter table public.user_settings add column if not exists journal jsonb not null default '[]'::jsonb;

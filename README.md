@@ -143,6 +143,18 @@ with accounts on and push set up (below), `netlify/functions/check-dip-alerts.mt
 sends them as push notifications every 10 minutes on weekdays, no extra
 env vars needed.
 
+**My trades** (`/journal`, linked from the Signals tab) imports Robinhood's
+account activity CSV (Account → Reports and statements → Reports →
+Generate report). The file is parsed in the browser; only the rows are
+kept (browser storage in local mode, `user_settings.journal` with accounts
+on), and re-importing overlapping date ranges skips rows already stored.
+Options trades are rebuilt from BTO/STC/STO/BTC/OEXP/OASGN/OEXER rows and
+each call is checked against what the dip signal said on the day you
+bought it. Robinhood doesn't publish the export format; the parser follows
+what third-party importers document (`src/lib/journal/robinhood.ts`), so a
+format change on their side would show up as "doesn't look like a
+Robinhood activity report" or missing trades.
+
 Options prices come from Yahoo's options endpoint, which (unlike the chart
 endpoint) needs a free cookie + "crumb" session the app fetches itself;
 they're delayed ~15 minutes. Call estimates are Black-Scholes at the
