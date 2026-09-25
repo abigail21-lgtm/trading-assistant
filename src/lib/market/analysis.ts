@@ -31,7 +31,7 @@ function findPivots(candles: Candle[], lookback: number): { price: number; type:
 }
 
 /** Merges nearby pivots (within tolerancePercent of each other) into single levels. */
-function clusterPivots(
+export function clusterPivots(
   pivots: { price: number; type: "low" | "high" }[],
   tolerancePercent: number,
 ): SupportResistanceLevel[] {
