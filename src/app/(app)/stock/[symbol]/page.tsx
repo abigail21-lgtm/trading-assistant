@@ -29,6 +29,8 @@ import InsiderActivityCard from "@/components/InsiderActivityCard";
 import { getInsiderActivity } from "@/lib/market/insider";
 import AlertsPanel from "@/components/AlertsPanel";
 import DeepDiveCard from "@/components/DeepDiveCard";
+import DipSetupCard from "@/components/DipSetupCard";
+import { getDipSnapshot } from "@/lib/signals/load";
 
 export default async function StockPage({
   params,
@@ -158,6 +160,9 @@ export default async function StockPage({
         </div>
 
         <div className="space-y-4 lg:col-start-3 lg:row-start-1 lg:row-span-2">
+          <Suspense fallback={<CardSkeleton />}>
+            <DipSetupSection symbol={symbol} />
+          </Suspense>
           <PriceAnalysisCard
             analysis={analysis}
             currency={quote.currency}
@@ -245,6 +250,12 @@ async function ComparisonSection({
       periodLabel={rangeLabel(timeframe.range)}
     />
   );
+}
+
+async function DipSetupSection({ symbol }: { symbol: string }) {
+  const snapshot = await getDipSnapshot(symbol).catch(() => null);
+  if (!snapshot) return null;
+  return <DipSetupCard snapshot={snapshot} />;
 }
 
 async function VolatilitySection({ symbol }: { symbol: string }) {

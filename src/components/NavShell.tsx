@@ -12,6 +12,7 @@ const TABS = [
   { href: "/", label: "Home", icon: HomeIcon },
   { href: "/stock", label: "Search", icon: SearchIcon },
   { href: "/compare", label: "Compare", icon: CompareIcon },
+  { href: "/signals", label: "Signals", icon: SignalsIcon },
 ];
 
 export default function NavShell({
@@ -123,6 +124,16 @@ function CompareIcon({ className }: { className?: string }) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M4 18 9 8l4 6 3-5 4 9" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h4M4 10h2" opacity={0.5} />
+    </svg>
+  );
+}
+
+function SignalsIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7l5 5 4-3 5 6" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14 15h3v-3" />
+      <path strokeLinecap="round" d="M3 20h18" />
     </svg>
   );
 }
