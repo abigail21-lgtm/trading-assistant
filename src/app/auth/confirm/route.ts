@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 // Landing point for the magic-link email. Requires the Supabase "Magic Link"
 // email template to be updated to point here (see README setup steps).
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const next = searchParams.get("next") ?? "/";
+  const next = safeRedirectPath(searchParams.get("next"));
 
   if (token_hash && type) {
     const supabase = await createClient();

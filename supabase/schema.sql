@@ -69,7 +69,9 @@ create policy "Users can create their own alerts"
 drop policy if exists "Users can update their own alerts" on public.alerts;
 create policy "Users can update their own alerts"
   on public.alerts for update
-  using (auth.uid() = user_id);
+  using (auth.uid() = user_id)
+  -- Without `with check`, an update could move a row to another user_id.
+  with check (auth.uid() = user_id);
 
 drop policy if exists "Users can delete their own alerts" on public.alerts;
 create policy "Users can delete their own alerts"
@@ -166,7 +168,8 @@ create policy "Users can create their own settings"
 drop policy if exists "Users can update their own settings" on public.user_settings;
 create policy "Users can update their own settings"
   on public.user_settings for update
-  using (auth.uid() = user_id);
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
 -- Imported Robinhood activity for "My trades" (src/lib/journal). Only the
 -- parsed transaction rows are stored (date, code, symbol, description,

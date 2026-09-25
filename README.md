@@ -160,6 +160,40 @@ endpoint) needs a free cookie + "crumb" session the app fetches itself;
 they're delayed ~15 minutes. Call estimates are Black-Scholes at the
 at-the-money implied volatility, not quotes.
 
+## Security
+
+What the app does:
+
+- **Row-level security** on every table: each account can only read and
+  write its own watchlist, alerts, drawings, push subscriptions, rules and
+  imported trades. Update policies also check the row stays yours.
+- **Signed-in only:** with accounts on, every page and every `/api` route
+  needs a session (routes holding personal data verify it with Supabase).
+- **Login redirects** only go to paths on this site (`src/lib/safe-redirect.ts`).
+- **Browser headers** on every response: no framing, no MIME sniffing,
+  HTTPS-only (HSTS), strict referrer, no camera/mic/location access.
+- **Secrets:** the service-role key and VAPID private key are only read by
+  the Netlify functions, never sent to the browser. `.env*` files are
+  gitignored.
+- **Robinhood files** are read in the browser; only the parsed rows are
+  stored, never the file.
+
+What you should set in Supabase once your own account exists (not
+possible from code):
+
+1. **Authentication → Sign In / Providers → Email: turn off "Allow new
+   users to sign up"** once you've signed in the first time. Otherwise
+   anyone who finds the URL can create an account. They'd only see their
+   own empty data, but they could use the app.
+2. **Authentication → Rate limits:** keep the defaults (they cap how many
+   login codes can be requested).
+3. **Keep your email account secure** (2-step verification on it): with
+   email-code login, access to your inbox is access to the app.
+
+Local mode (no Supabase variables) has no login at all; it's meant for
+running on your own computer. Don't deploy it publicly with real data,
+since imported trades live in that browser's storage.
+
 ## Architecture
 
 - **Framework:** Next.js 16 (App Router), TypeScript, Tailwind CSS.

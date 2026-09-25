@@ -36,6 +36,15 @@ export function proxy(request: NextRequest) {
   const isPublicPage = PUBLIC_PAGE_PREFIXES.some((p) => pathname.startsWith(p));
   const loggedIn = hasSessionCookie(request);
 
+  // With accounts on, the data routes are for signed-in users only. Routes
+  // holding personal data also verify the session themselves (backed by
+  // RLS); this presence check stops everyone else from using the app's
+  // Yahoo/Nasdaq/options fetching as a free public relay, which could get
+  // the deployment rate-limited or blocked by those sources.
+  if (!loggedIn && isApiRoute) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+
   if (!loggedIn && !isApiRoute && !isPublicPage) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
