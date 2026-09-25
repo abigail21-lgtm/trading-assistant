@@ -6,6 +6,8 @@
 // the money), with a quarter of the bid/ask spread paid on the way in and
 // again on the way out. They're estimates, not quotes.
 
+import type { StrikeStyle } from "./rules";
+
 export interface OptionQuote {
   strike: number;
   bid: number;
@@ -29,6 +31,8 @@ export interface StrikeRow {
   bouncePct: number;
   slideDollars: number;
   slidePct: number;
+  /** Estimated result per contract in the bad case (sizing uses this). */
+  badDollars: number;
   spreadPct: number;
   openInterest: number;
   /** Suggested limit price per share, rounded to $0.05. */
@@ -48,20 +52,27 @@ export interface Scenario {
   price: number;
   /** Where the stock is if the bounce plays out (the sell price). */
   bouncePrice: number;
-  /** A further slide, as a bad case. */
+  /** A further 3% slide, shown on every strike. */
   slidePrice: number;
+  /** A bad case for sizing, e.g. as far as this stock's worst past dip went. */
+  badPrice: number;
   /** Calendar days the scenarios assume the call is held. */
   holdDays: number;
 }
 
 const RATE = 0.04;
-/** In-the-money band that suits small, quick moves: enough delta, not the priciest strikes. */
-const GOOD_ITM_MIN = 0.02;
-const GOOD_ITM_MAX = 0.1;
-const TARGET_ITM = 0.05;
+/**
+ * In-the-money bands that suit small, quick moves, per strike style: how far
+ * in the money a GOOD strike can be, and where the pick aims.
+ */
+const STYLE_BANDS: Record<StrikeStyle, { min: number; max: number; target: number }> = {
+  deeper: { min: 0.05, max: 0.14, target: 0.08 },
+  balanced: { min: 0.02, max: 0.1, target: 0.05 },
+  closer: { min: 0, max: 0.06, target: 0.02 },
+};
 const MAX_GOOD_SPREAD = 0.1;
 const MIN_GOOD_OPEN_INTEREST = 100;
-/** Strikes shown: from this far in the money... */
+/** Strikes shown: from at least this far in the money... */
 const BAND_ITM = 0.12;
 /** ...to this far out of it. */
 const BAND_OTM = 0.03;
@@ -113,13 +124,18 @@ export function atTheMoneyVol(chain: OptionQuote[], price: number): number | nul
   return usable.reduce((best, q) => (Math.abs(q.strike - price) < Math.abs(best.strike - price) ? q : best)).impliedVolatility;
 }
 
-function gradeStrike(q: OptionQuote, price: number, spreadPct: number): { grade: StrikeGrade; tag: string } {
+function gradeStrike(
+  q: OptionQuote,
+  price: number,
+  spreadPct: number,
+  band: { min: number; max: number },
+): { grade: StrikeGrade; tag: string } {
   const itm = (price - q.strike) / price;
   if (q.bid <= 0 || q.openInterest < 10) return { grade: "avoid", tag: "Hardly trades" };
   if (q.strike > price) return { grade: "avoid", tag: "Out of the money; needs a bigger bounce" };
   if (spreadPct > MAX_GOOD_SPREAD) return { grade: "caution", tag: "Wide gap between buy and sell prices" };
-  if (itm < GOOD_ITM_MIN) return { grade: "caution", tag: "At the money, loses value faster" };
-  if (itm > GOOD_ITM_MAX) return { grade: "caution", tag: "Deep in the money, costs the most" };
+  if (itm < band.min) return { grade: "caution", tag: itm < 0.02 ? "At the money, loses value faster" : "Less in the money than your rules prefer" };
+  if (itm > band.max) return { grade: "caution", tag: "Deep in the money, costs the most" };
   if (q.openInterest < MIN_GOOD_OPEN_INTEREST) return { grade: "caution", tag: "Few open contracts" };
   return { grade: "good", tag: "Good balance" };
 }
@@ -129,7 +145,10 @@ export function gradeCalls(
   scenario: Scenario,
   expiration: number,
   now: number = Date.now() / 1000,
+  style: StrikeStyle = "balanced",
 ): CallsForExpiry {
+  const band = STYLE_BANDS[style];
+  const bandItm = Math.max(BAND_ITM, band.max + 0.02);
   const daysToExpiry = Math.max(0, Math.round((expiration - now) / 86400));
   const vol = atTheMoneyVol(chain, scenario.price);
   const T1 = Math.max(0, daysToExpiry - scenario.holdDays) / 365;
@@ -137,7 +156,7 @@ export function gradeCalls(
   if (vol == null) return { expiration, daysToExpiry, rows, pickIndex: null };
 
   for (const q of chain) {
-    if (q.strike < scenario.price * (1 - BAND_ITM) || q.strike > scenario.price * (1 + BAND_OTM)) continue;
+    if (q.strike < scenario.price * (1 - bandItm) || q.strike > scenario.price * (1 + BAND_OTM)) continue;
     const mid = q.bid > 0 && q.ask > 0 ? (q.bid + q.ask) / 2 : q.ask > 0 ? q.ask : 0;
     if (mid <= 0) continue;
     const spread = Math.max(0, q.ask - q.bid);
@@ -146,7 +165,8 @@ export function gradeCalls(
     const exitValue = (S: number) => Math.max(0, bsCall(S, q.strike, T1, vol) - spread / 4);
     const bounce = exitValue(scenario.bouncePrice);
     const slide = exitValue(scenario.slidePrice);
-    const { grade, tag } = gradeStrike(q, scenario.price, spreadPct);
+    const bad = exitValue(scenario.badPrice);
+    const { grade, tag } = gradeStrike(q, scenario.price, spreadPct, band);
     rows.push({
       strike: q.strike,
       grade,
@@ -157,6 +177,7 @@ export function gradeCalls(
       bouncePct: ((bounce - paid) / paid) * 100,
       slideDollars: (slide - paid) * 100,
       slidePct: ((slide - paid) / paid) * 100,
+      badDollars: (bad - paid) * 100,
       spreadPct,
       openInterest: q.openInterest,
       limitPrice: roundTo5c(mid),
@@ -168,7 +189,7 @@ export function gradeCalls(
   let pickIndex: number | null = null;
   if (good.length > 0) {
     pickIndex = good.reduce((best, cur) => {
-      const d = (x: StrikeRow) => Math.abs((scenario.price - x.strike) / scenario.price - TARGET_ITM);
+      const d = (x: StrikeRow) => Math.abs((scenario.price - x.strike) / scenario.price - band.target);
       return d(cur.r) < d(best.r) ? cur : best;
     }).i;
     rows[pickIndex] = { ...rows[pickIndex], tag: "Best balance" };
@@ -177,18 +198,31 @@ export function gradeCalls(
 }
 
 /**
- * Up to three expirations near 3, 5 and 8 weeks out, each at least
- * `minDays` away. Returns them in date order, without duplicates.
+ * Up to three expirations inside the user's range: near its start, middle
+ * and end. Returns them in date order, without duplicates.
  */
-export function chooseExpirations(expirations: number[], now: number = Date.now() / 1000, minDays = 14): number[] {
-  const future = expirations.filter((e) => (e - now) / 86400 >= minDays).sort((a, b) => a - b);
+export function chooseExpirations(
+  expirations: number[],
+  now: number = Date.now() / 1000,
+  minWeeks = 3,
+  maxWeeks = 8,
+): number[] {
+  const days = (e: number) => (e - now) / 86400;
+  const inRange = expirations.filter((e) => days(e) >= minWeeks * 7 - 3 && days(e) <= maxWeeks * 7 + 3).sort((a, b) => a - b);
   const picks = new Set<number>();
-  for (const targetDays of [21, 35, 56]) {
-    const best = future.reduce<number | null>(
-      (b, e) => (b == null || Math.abs((e - now) / 86400 - targetDays) < Math.abs((b - now) / 86400 - targetDays) ? e : b),
+  for (const targetDays of [minWeeks * 7, ((minWeeks + maxWeeks) / 2) * 7, maxWeeks * 7]) {
+    const best = inRange.reduce<number | null>(
+      (b, e) => (b == null || Math.abs(days(e) - targetDays) < Math.abs(days(b) - targetDays) ? e : b),
       null,
     );
     if (best != null) picks.add(best);
   }
   return [...picks].sort((a, b) => a - b);
+}
+
+/** How many contracts fit a max loss, given one contract's bad-case loss. */
+export function contractsForMaxLoss(maxLoss: number, badDollars: number): number {
+  const lossPerContract = Math.max(0, -badDollars);
+  if (lossPerContract === 0) return 0;
+  return Math.floor(maxLoss / lossPerContract);
 }

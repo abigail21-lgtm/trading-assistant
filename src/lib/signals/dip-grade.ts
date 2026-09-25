@@ -1,5 +1,6 @@
 import type { DipEvaluation } from "./dip";
 import type { StrikeRow } from "./calls";
+import type { EarningsRule } from "./rules";
 
 // GO / CAUTION / PASS for a dip, with the plain-English reasons shown on the
 // Signals tab and the Setup screen. Only things that tested as mattering
@@ -15,8 +16,6 @@ export interface DipCheck {
   title: string;
   detail: string;
 }
-
-export type EarningsRule = "warn" | "block" | "ignore";
 
 export interface DipRules {
   earnings: EarningsRule;

@@ -31,6 +31,7 @@ import AlertsPanel from "@/components/AlertsPanel";
 import DeepDiveCard from "@/components/DeepDiveCard";
 import DipSetupCard from "@/components/DipSetupCard";
 import { getDipSnapshot } from "@/lib/signals/load";
+import { getServerRules } from "@/lib/signals/rules-server";
 
 export default async function StockPage({
   params,
@@ -253,7 +254,8 @@ async function ComparisonSection({
 }
 
 async function DipSetupSection({ symbol }: { symbol: string }) {
-  const snapshot = await getDipSnapshot(symbol).catch(() => null);
+  const rules = await getServerRules();
+  const snapshot = await getDipSnapshot(symbol, rules).catch(() => null);
   if (!snapshot) return null;
   return <DipSetupCard snapshot={snapshot} />;
 }

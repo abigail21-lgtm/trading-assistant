@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bsCall, chooseExpirations, gradeCalls, type OptionQuote } from "./calls";
+import { bsCall, chooseExpirations, contractsForMaxLoss, gradeCalls, type OptionQuote } from "./calls";
 
 const DAY = 86400;
 const NOW = 1_800_000_000;
@@ -24,7 +24,7 @@ describe("bsCall", () => {
 });
 
 describe("gradeCalls", () => {
-  const scenario = { price: 150, bouncePrice: 153, slidePrice: 145.5, holdDays: 3 };
+  const scenario = { price: 150, bouncePrice: 153, slidePrice: 145.5, badPrice: 135, holdDays: 3 };
 
   it("picks a liquid strike a few percent in the money, and never an out-of-the-money one", () => {
     const res = gradeCalls(chain(150, 0.4, 35), scenario, NOW + 35 * DAY, NOW);
@@ -77,11 +77,42 @@ describe("row count", () => {
       const fair = bsCall(600, k, 35 / 365, 0.5);
       many.push({ strike: k, bid: fair * 0.99, ask: fair * 1.01, impliedVolatility: 0.5, openInterest: 500, volume: 10 });
     }
-    const res = gradeCalls(many, { price: 600, bouncePrice: 612, slidePrice: 582, holdDays: 3 }, NOW + 35 * DAY, NOW);
+    const res = gradeCalls(many, { price: 600, bouncePrice: 612, slidePrice: 582, badPrice: 540, holdDays: 3 }, NOW + 35 * DAY, NOW);
     expect(res.rows.length).toBe(7);
     expect(res.pickIndex).not.toBeNull();
     expect(res.rows[res.pickIndex!].strike).toBe(570);
     expect(res.rows[0].strike).toBeLessThan(540);
     expect(res.rows.at(-1)!.strike).toBeGreaterThan(600);
+  });
+});
+
+describe("user rules", () => {
+  const scenario = { price: 150, bouncePrice: 153, slidePrice: 145.5, badPrice: 135, holdDays: 3 };
+
+  it("moves the pick with the strike style", () => {
+    // $300 stock with $5 strikes, so 2% / 5% / 8% in the money land on different strikes.
+    const s300 = { price: 300, bouncePrice: 306, slidePrice: 291, badPrice: 270, holdDays: 3 };
+    const pickFor = (style: "deeper" | "balanced" | "closer") => {
+      const res = gradeCalls(chain(300, 0.4, 35), s300, NOW + 35 * DAY, NOW, style);
+      return res.rows[res.pickIndex!].strike;
+    };
+    expect(pickFor("deeper")).toBe(275);
+    expect(pickFor("balanced")).toBe(285);
+    expect(pickFor("closer")).toBe(295);
+  });
+
+  it("sizes contracts from the bad-case loss", () => {
+    const res = gradeCalls(chain(150, 0.4, 35), scenario, NOW + 35 * DAY, NOW);
+    const pick = res.rows[res.pickIndex!];
+    expect(pick.badDollars).toBeLessThan(pick.slideDollars);
+    expect(contractsForMaxLoss(1000, -300)).toBe(3);
+    expect(contractsForMaxLoss(200, -300)).toBe(0);
+  });
+
+  it("keeps expirations inside the chosen range", () => {
+    const weekly = Array.from({ length: 16 }, (_, i) => NOW + (i + 1) * 7 * DAY);
+    const picked = chooseExpirations(weekly, NOW, 2, 4).map((e) => Math.round((e - NOW) / DAY));
+    expect(picked).toEqual([14, 21, 28]);
+    expect(chooseExpirations(weekly, NOW, 5, 12).map((e) => Math.round((e - NOW) / DAY))).toEqual([35, 56, 84]); // 8.5 weeks is a tie between 8 and 9; the earlier wins
   });
 });

@@ -137,3 +137,33 @@ drop policy if exists "Users can delete their own push subscriptions" on public.
 create policy "Users can delete their own push subscriptions"
   on public.push_subscriptions for delete
   using (auth.uid() = user_id);
+
+-- "My rules" for the Dip in an uptrend signal (src/lib/signals/rules.ts),
+-- plus which dip alerts were already pushed (alert_log: alert key -> sent
+-- time in ms), so the scheduled job (netlify/functions/check-dip-alerts)
+-- sends each one once. One row per user; the app also keeps a cookie copy
+-- so pages render with your rules even before this table exists.
+create table if not exists public.user_settings (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  rules jsonb not null default '{}'::jsonb,
+  alert_log jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.user_settings enable row level security;
+grant select, insert, update on public.user_settings to authenticated;
+
+drop policy if exists "Users can view their own settings" on public.user_settings;
+create policy "Users can view their own settings"
+  on public.user_settings for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can create their own settings" on public.user_settings;
+create policy "Users can create their own settings"
+  on public.user_settings for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update their own settings" on public.user_settings;
+create policy "Users can update their own settings"
+  on public.user_settings for update
+  using (auth.uid() = user_id);

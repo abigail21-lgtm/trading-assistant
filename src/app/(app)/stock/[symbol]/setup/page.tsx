@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { SymbolNotFoundError } from "@/lib/market/yahoo";
 import { getDipSetup, addTradingDays, type DipSetup } from "@/lib/signals/load";
+import { getServerRules } from "@/lib/signals/rules-server";
+import { describeChanges, isTracked, type TradingRules } from "@/lib/signals/rules";
+import TrackTradeButton from "@/components/TrackTradeButton";
 import { INDEX_FUNDS } from "@/lib/signals/dip";
 import type { DipCheck } from "@/lib/signals/dip-grade";
 import { money, sessionDate, sessionWeekday, signedPct, wilsonInterval } from "@/lib/signals/format";
@@ -12,9 +15,10 @@ export default async function SetupPage({ params }: { params: Promise<{ symbol: 
   const { symbol: rawSymbol } = await params;
   const symbol = rawSymbol.toUpperCase();
 
+  const rules = await getServerRules();
   let setup: DipSetup;
   try {
-    setup = await getDipSetup(symbol);
+    setup = await getDipSetup(symbol, rules);
   } catch (err) {
     const notFound = err instanceof SymbolNotFoundError;
     return (
@@ -35,6 +39,8 @@ export default async function SetupPage({ params }: { params: Promise<{ symbol: 
   const e = setup.evaluation;
   const { grade } = setup;
   const bouncePrice = Math.max(e.sellPrice ?? e.price, e.price * 1.005);
+  const badPct = Math.min(-3, Math.max(-15, setup.trackRecord?.worstReturnPct ?? -8));
+  const ruleNotes = describeChanges(rules);
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 px-4 py-6">
@@ -60,15 +66,24 @@ export default async function SetupPage({ params }: { params: Promise<{ symbol: 
           )}
         </div>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{grade.reason}</p>
+        {ruleNotes.length > 0 && (e.status === "signal" || e.status === "in-buy-zone") && (
+          <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-950/60 dark:text-slate-400">
+            <b className="font-semibold text-slate-800 dark:text-slate-200">Your rules:</b> {ruleNotes.join(" ")}{" "}
+            <Link href="/settings" className="underline underline-offset-2">
+              Change
+            </Link>
+          </p>
+        )}
 
         <div className="mt-3">
           <DipMiniChart points={setup.recent} avg200={e.avg200} sellPrice={e.sellPrice} downDays={e.downDays} />
         </div>
 
         <Plan setup={setup} />
+        <Track setup={setup} rules={rules} />
       </section>
 
-      {isTradeUnderWay(e.status) && (
+      {isTradeUnderWay(e.status) && !isTracked(rules, symbol, e.signalTime) && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
           <h2 className="font-semibold text-slate-700 dark:text-slate-300">Not holding it?</h2>
           <p className="mt-1">
@@ -85,6 +100,8 @@ export default async function SetupPage({ params }: { params: Promise<{ symbol: 
             expiries={setup.expiries}
             defaultIndex={setup.defaultExpiryIndex}
             bouncePrice={bouncePrice}
+            badPct={badPct}
+            maxLossPerTrade={rules.maxLossPerTrade}
           />
         ) : (
           <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
@@ -119,6 +136,22 @@ export default async function SetupPage({ params }: { params: Promise<{ symbol: 
         Automated read from price data. Past results don&apos;t guarantee future ones. Not investment advice.
       </p>
     </div>
+  );
+}
+
+/** The dip bar a trade taken now belongs to: today's live bar while in the buy zone, else the signal bar. */
+function Track({ setup, rules }: { setup: DipSetup; rules: TradingRules }) {
+  const e = setup.evaluation;
+  if (e.status === "none" || e.status === "sell-today") return null;
+  const signalTime = e.status === "in-buy-zone" ? setup.sessionTime : e.signalTime;
+  if (signalTime == null) return null;
+  return (
+    <TrackTradeButton
+      symbol={setup.symbol}
+      signalTime={signalTime}
+      initiallyTracked={isTracked(rules, setup.symbol, signalTime)}
+      sellAlertsOn={rules.alerts.sell}
+    />
   );
 }
 

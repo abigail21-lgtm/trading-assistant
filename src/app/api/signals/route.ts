@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { INDEX_FUNDS } from "@/lib/signals/dip";
 import { getDipSnapshots } from "@/lib/signals/load";
+import { getServerRules } from "@/lib/signals/rules-server";
+
+// Reads the user's rules (cookie / account), so never cached.
+export const dynamic = "force-dynamic";
 
 export interface SignalRow {
   symbol: string;
@@ -24,7 +28,9 @@ export async function GET(request: Request) {
     ),
   ).slice(0, 40);
 
-  const results = await getDipSnapshots([...INDEX_FUNDS, ...watchlist]);
+  const rules = await getServerRules();
+  const symbols = [...(rules.scanIndexFunds ? INDEX_FUNDS : []), ...(rules.scanWatchlist ? watchlist : [])];
+  const results = await getDipSnapshots(symbols, rules);
   const rows: SignalRow[] = results.map(({ symbol, snapshot }) =>
     snapshot
       ? {
@@ -49,5 +55,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     index: rows.filter((r) => INDEX_FUNDS.includes(r.symbol)),
     watchlist: rows.filter((r) => !INDEX_FUNDS.includes(r.symbol)),
+    scanIndexFunds: rules.scanIndexFunds,
+    scanWatchlist: rules.scanWatchlist,
   });
 }

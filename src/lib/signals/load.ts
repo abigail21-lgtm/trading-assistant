@@ -5,6 +5,7 @@ import { evaluateDip, findDipTrades, paramsFor, summarizeTrades, type DipEvaluat
 import { chooseExpirations, gradeCalls, type CallsForExpiry } from "./calls";
 import { gradeDip, type DipGradeResult, type EarningsInfo } from "./dip-grade";
 import { sessionWeekday } from "./format";
+import { DEFAULT_RULES, type TradingRules } from "./rules";
 
 // Server-side loaders for the dip signal: fetch, evaluate, grade. Pages and
 // the /api/signals route call these; everything they call into is pure.
@@ -57,8 +58,9 @@ function snapshotFrom(
   candles: Candle[],
   earnings: EarningsInfo | null,
   withTrackRecord: boolean,
+  rules: TradingRules,
 ): DipSnapshot {
-  const params = paramsFor(symbol);
+  const params = paramsFor(symbol, rules.stockDipDepth);
   const live = isLive(meta.marketState);
   const evaluation = evaluateDip(candles, params, live);
   const completed = live ? candles.slice(0, -1) : candles;
@@ -81,7 +83,7 @@ function snapshotFrom(
     evaluation,
     trackRecord: withTrackRecord ? summarizeTrades(findDipTrades(completed, params), completed) : null,
     earnings,
-    grade: gradeDip({ symbol, evaluation, earnings, session: live ? "today" : sessionWeekday(sessionTime) }),
+    grade: gradeDip({ symbol, evaluation, earnings, rules, session: live ? "today" : sessionWeekday(sessionTime) }),
     recent,
     sessionTime,
     lastDayTime,
@@ -89,16 +91,19 @@ function snapshotFrom(
 }
 
 /** One symbol, with its 10-year track record. For the stock page card. */
-export async function getDipSnapshot(symbol: string): Promise<DipSnapshot> {
+export async function getDipSnapshot(symbol: string, rules: TradingRules = DEFAULT_RULES): Promise<DipSnapshot> {
   const [chart, earningsMap] = await Promise.all([
     getChart(symbol, "10y", "1d"),
     getUpcomingEarningsForSymbols([symbol]).catch(() => new Map<string, EarningsEvent>()),
   ]);
-  return snapshotFrom(symbol, chart.meta, chart.candles, earningsFromCalendar(earningsMap.get(symbol)), true);
+  return snapshotFrom(symbol, chart.meta, chart.candles, earningsFromCalendar(earningsMap.get(symbol)), true, rules);
 }
 
 /** Many symbols, no track record (2 years of data is enough for the rules). For the Signals tab. */
-export async function getDipSnapshots(symbols: string[]): Promise<{ symbol: string; snapshot: DipSnapshot | null }[]> {
+export async function getDipSnapshots(
+  symbols: string[],
+  rules: TradingRules = DEFAULT_RULES,
+): Promise<{ symbol: string; snapshot: DipSnapshot | null }[]> {
   const earningsMap = await getUpcomingEarningsForSymbols(symbols).catch(() => new Map<string, EarningsEvent>());
   return Promise.all(
     symbols.map(async (symbol) => {
@@ -106,7 +111,7 @@ export async function getDipSnapshots(symbols: string[]): Promise<{ symbol: stri
         const chart = await getChart(symbol, "2y", "1d");
         return {
           symbol,
-          snapshot: snapshotFrom(symbol, chart.meta, chart.candles, earningsFromCalendar(earningsMap.get(symbol)), false),
+          snapshot: snapshotFrom(symbol, chart.meta, chart.candles, earningsFromCalendar(earningsMap.get(symbol)), false, rules),
         };
       } catch {
         return { symbol, snapshot: null };
@@ -140,8 +145,8 @@ async function spyAboveTrend(): Promise<boolean | null> {
 }
 
 /** Everything the Setup screen shows, including graded calls for up to three expiries. */
-export async function getDipSetup(symbol: string): Promise<DipSetup> {
-  const [snapshot, marketUp] = await Promise.all([getDipSnapshot(symbol), spyAboveTrend()]);
+export async function getDipSetup(symbol: string, rules: TradingRules = DEFAULT_RULES): Promise<DipSetup> {
+  const [snapshot, marketUp] = await Promise.all([getDipSnapshot(symbol, rules), spyAboveTrend()]);
   const e = snapshot.evaluation;
   const session = e.lastBarIsLive ? "today" : sessionWeekday(snapshot.sessionTime);
   const base: DipSetup = { ...snapshot, expiries: [], defaultExpiryIndex: 0, optionsError: null, marketUp };
@@ -152,7 +157,7 @@ export async function getDipSetup(symbol: string): Promise<DipSetup> {
   let expirations: number[] = [];
   try {
     const overview = await getOptionsOverview(symbol);
-    expirations = chooseExpirations(overview.expirations);
+    expirations = chooseExpirations(overview.expirations, Date.now() / 1000, rules.minWeeks, rules.maxWeeks);
     // The Nasdaq calendar only looks 30 days ahead; Yahoo's (often estimated)
     // date covers contracts that run longer.
     if (!earnings && overview.earningsTime) {
@@ -166,7 +171,7 @@ export async function getDipSetup(symbol: string): Promise<DipSetup> {
     return {
       ...base,
       earnings,
-      grade: gradeDip({ symbol, evaluation: e, earnings, marketUp, session }),
+      grade: gradeDip({ symbol, evaluation: e, earnings, marketUp, session, rules }),
       optionsError: "Couldn't load options prices right now. Try again in a minute.",
     };
   }
@@ -175,8 +180,9 @@ export async function getDipSetup(symbol: string): Promise<DipSetup> {
     return {
       ...base,
       earnings,
-      grade: gradeDip({ symbol, evaluation: e, earnings, marketUp, session }),
-      optionsError: expirations.length === 0 ? "No option expirations 2+ weeks out." : null,
+      grade: gradeDip({ symbol, evaluation: e, earnings, marketUp, session, rules }),
+      optionsError:
+        expirations.length === 0 ? `No option expirations between ${rules.minWeeks} and ${rules.maxWeeks} weeks out.` : null,
     };
   }
 
@@ -185,6 +191,8 @@ export async function getDipSetup(symbol: string): Promise<DipSetup> {
     // The bounce ends at the sell price; if price is already above it, assume a small further move.
     bouncePrice: Math.max(e.sellPrice ?? e.price, e.price * 1.005),
     slidePrice: e.price * 0.97,
+    // Sizing uses a bad case: as far as this symbol's worst past dip fell, kept between -3% and -15%.
+    badPrice: e.price * (1 + Math.min(-3, Math.max(-15, snapshot.trackRecord?.worstReturnPct ?? -8)) / 100),
     holdDays: 3,
   };
   const chains = await Promise.all(
@@ -193,9 +201,9 @@ export async function getDipSetup(symbol: string): Promise<DipSetup> {
   const expiries: ExpiryOption[] = chains
     .filter((c): c is { exp: number; chain: Awaited<ReturnType<typeof getCallChain>> } => c !== null)
     .map(({ exp, chain }) => {
-      const calls = gradeCalls(chain, scenario, exp);
+      const calls = gradeCalls(chain, scenario, exp, Date.now() / 1000, rules.strikeStyle);
       const pick = calls.pickIndex != null ? calls.rows[calls.pickIndex] : null;
-      return { calls, grade: gradeDip({ symbol, evaluation: e, earnings, daysToExpiry: calls.daysToExpiry, pick, marketUp, session }) };
+      return { calls, grade: gradeDip({ symbol, evaluation: e, earnings, daysToExpiry: calls.daysToExpiry, pick, marketUp, session, rules }) };
     });
   const defaultExpiryIndex = expiries.reduce(
     (best, x, i) => (Math.abs(x.calls.daysToExpiry - 35) < Math.abs(expiries[best].calls.daysToExpiry - 35) ? i : best),
@@ -206,7 +214,7 @@ export async function getDipSetup(symbol: string): Promise<DipSetup> {
     earnings,
     expiries,
     defaultExpiryIndex,
-    grade: expiries[defaultExpiryIndex]?.grade ?? gradeDip({ symbol, evaluation: e, earnings, marketUp, session }),
+    grade: expiries[defaultExpiryIndex]?.grade ?? gradeDip({ symbol, evaluation: e, earnings, marketUp, session, rules }),
     optionsError: expiries.length === 0 ? "Couldn't load options prices right now. Try again in a minute." : null,
   };
 }

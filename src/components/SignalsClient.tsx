@@ -9,6 +9,8 @@ import DipGradePill, { DipStagePill, isTradeUnderWay } from "./DipGradePill";
 interface Data {
   index: SignalRow[];
   watchlist: SignalRow[];
+  scanIndexFunds: boolean;
+  scanWatchlist: boolean;
 }
 
 export default function SignalsClient() {
@@ -50,8 +52,10 @@ export default function SignalsClient() {
 
   return (
     <div className="mt-6 space-y-6">
-      <Section title="Index funds" subtitle="Best fit for calls: tight prices on the options." rows={data.index} />
-      {watchlistEmpty ? (
+      {data.scanIndexFunds && (
+        <Section title="Index funds" subtitle="Best fit for calls: tight prices on the options." rows={data.index} />
+      )}
+      {!data.scanWatchlist ? null : watchlistEmpty ? (
         <section>
           <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Your watchlist</h2>
           <p className="mt-2 text-sm text-slate-500">
@@ -60,6 +64,9 @@ export default function SignalsClient() {
         </section>
       ) : (
         <Section title="Your watchlist" subtitle="Stocks only count deeper dips, which tested better." rows={data.watchlist} />
+      )}
+      {!data.scanIndexFunds && !data.scanWatchlist && (
+        <p className="text-sm text-slate-500">Both lists are turned off in My rules.</p>
       )}
       <p className="text-[10px] text-slate-400">Automated read from price data. Not investment advice.</p>
     </div>

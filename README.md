@@ -118,6 +118,36 @@ your account. Add an alert with a condition that's already true (e.g. a
 price-below target above the current price) and wait up to 5 minutes; a
 push notification should arrive even with the tab closed.
 
+## Signals: "Dip in an uptrend"
+
+The **Signals** tab, the "Dip in an uptrend" card on each stock page, and
+the Setup screen behind it (`/stock/SYMBOL/setup`) come from one rule set
+that beat random entries in testing (`scripts/research-*.ts`):
+
+- **Signal:** close above the 200-day average, and a 2-day RSI under 10
+  (index funds) or 5 (stocks; adjustable in My rules).
+- **Buy** near that day's close; **sell** on the first close above the
+  5-day average (a fixed price each day: the average of the previous 4
+  closes), or after 5 trading days. No stop-loss.
+
+**My rules** (`/settings`, linked from the Signals tab) adjusts dip depth,
+which lists to scan, the expiry range, strike style, max loss per trade
+(used to suggest a contract count), how earnings are treated, and alerts.
+Rules live in a cookie in local mode, and in the `user_settings` table with
+accounts on (re-run `supabase/schema.sql` to add it).
+
+**Dip alerts:** buy zone near the close (~3pm ET), time to sell for trades
+you marked "I bought this" (~3:15pm ET), and optionally "closed in a dip"
+after the close. Local mode shows them in-app while MarketDesk is open;
+with accounts on and push set up (below), `netlify/functions/check-dip-alerts.mts`
+sends them as push notifications every 10 minutes on weekdays, no extra
+env vars needed.
+
+Options prices come from Yahoo's options endpoint, which (unlike the chart
+endpoint) needs a free cookie + "crumb" session the app fetches itself;
+they're delayed ~15 minutes. Call estimates are Black-Scholes at the
+at-the-money implied volatility, not quotes.
+
 ## Architecture
 
 - **Framework:** Next.js 16 (App Router), TypeScript, Tailwind CSS.

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { CallsForExpiry, StrikeGrade } from "@/lib/signals/calls";
+import Link from "next/link";
+import { contractsForMaxLoss, type CallsForExpiry, type StrikeGrade } from "@/lib/signals/calls";
 import type { DipGradeResult } from "@/lib/signals/dip-grade";
 import { money, signedDollars, signedPct, wholeDollars } from "@/lib/signals/format";
 import DipGradePill from "./DipGradePill";
@@ -23,11 +24,16 @@ export default function DipCallsPicker({
   expiries,
   defaultIndex,
   bouncePrice,
+  badPct,
+  maxLossPerTrade,
 }: {
   symbol: string;
   expiries: { calls: CallsForExpiry; grade: DipGradeResult }[];
   defaultIndex: number;
   bouncePrice: number;
+  /** The bad-case stock move used for sizing, e.g. -12 (%). */
+  badPct: number;
+  maxLossPerTrade: number | null;
 }) {
   const [index, setIndex] = useState(defaultIndex);
   const { calls, grade } = expiries[index];
@@ -99,6 +105,7 @@ export default function DipCallsPicker({
           <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400">
             A bit in the money: moves closely with {symbol} without costing as much as the deepest strikes.
           </p>
+          <Sizing symbol={symbol} badDollars={pick.badDollars} cost={pick.cost} badPct={badPct} maxLoss={maxLossPerTrade} />
         </div>
       ) : (
         <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-950/60 dark:text-slate-400">
@@ -159,5 +166,49 @@ export default function DipCallsPicker({
         {symbol} falls another 3%. Estimates for one contract, not quotes. Not investment advice.
       </p>
     </section>
+  );
+}
+
+function Sizing({
+  symbol,
+  badDollars,
+  cost,
+  badPct,
+  maxLoss,
+}: {
+  symbol: string;
+  badDollars: number;
+  cost: number;
+  badPct: number;
+  maxLoss: number | null;
+}) {
+  const box = "mt-2 rounded-md bg-slate-50 px-2.5 py-2 text-xs text-slate-600 dark:bg-slate-950/60 dark:text-slate-400";
+  if (maxLoss == null) {
+    return (
+      <p className={box}>
+        <Link href="/settings" className="font-medium text-emerald-600 underline underline-offset-2 dark:text-emerald-400">
+          Set a max loss per trade
+        </Link>{" "}
+        to see how many contracts to buy.
+      </p>
+    );
+  }
+  const n = contractsForMaxLoss(maxLoss, badDollars);
+  const bad = `if ${symbol} fell ${Math.abs(badPct).toFixed(0)}% (about its worst past dip), one contract would lose about ${wholeDollars(badDollars)}`;
+  if (n === 0) {
+    return (
+      <p className={box}>
+        <b className="font-semibold text-amber-700 dark:text-amber-400">Over your {wholeDollars(maxLoss)} limit.</b> In a bad case, {bad}.
+        Try a cheaper strike, or skip this one.
+      </p>
+    );
+  }
+  return (
+    <p className={box}>
+      <b className="font-semibold text-slate-800 dark:text-slate-200">
+        Buy {n} contract{n === 1 ? "" : "s"}
+      </b>{" "}
+      with your {wholeDollars(maxLoss)} max loss: {bad}. You could still lose up to the full {wholeDollars(cost * n)} you paid.
+    </p>
   );
 }

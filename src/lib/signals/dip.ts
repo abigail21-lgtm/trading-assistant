@@ -27,8 +27,10 @@ export const INDEX_FUNDS = ["SPY", "QQQ", "IWM", "DIA"];
 export const INDEX_DIP: DipParams = { rsiMax: 10, maxHoldBars: 5 };
 export const STOCK_DIP: DipParams = { rsiMax: 5, maxHoldBars: 5 };
 
-export function paramsFor(symbol: string): DipParams {
-  return INDEX_FUNDS.includes(symbol.toUpperCase()) ? INDEX_DIP : STOCK_DIP;
+/** Index funds always use RSI < 10; stocks use the user's depth (deep = RSI < 5, the tested default). */
+export function paramsFor(symbol: string, stockDipDepth: "deep" | "normal" = "deep"): DipParams {
+  if (INDEX_FUNDS.includes(symbol.toUpperCase())) return INDEX_DIP;
+  return stockDipDepth === "normal" ? { ...STOCK_DIP, rsiMax: 10 } : STOCK_DIP;
 }
 
 const TREND_BARS = 200;
