@@ -107,10 +107,15 @@ async function fetchYahooNews(
 ): Promise<NewsItem[]> {
   const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&newsCount=${count}&quotesCount=0`;
   const [res, summaries] = await Promise.all([
-    fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: revalidateSeconds } }),
+    // Bounded like every other upstream call: without a timeout, one hung
+    // response from Yahoo held up the whole home page (and with it the
+    // installed app's splash screen) until the platform killed the function.
+    fetch(url, { headers: BROWSER_HEADERS, next: { revalidate: revalidateSeconds }, signal: timeoutSignal(8000) }).catch(
+      () => null,
+    ),
     fetchNewsSummaries(summarySymbols, revalidateSeconds),
   ]);
-  if (!res.ok) return [];
+  if (!res || !res.ok) return [];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let json: any;

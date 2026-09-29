@@ -27,3 +27,24 @@ export function timeoutSignal(ms: number): AbortSignal {
   setTimeout(() => controller.abort(), ms);
   return controller.signal;
 }
+
+/**
+ * Resolves to the promise's value, or to `fallback` if it takes longer than
+ * `ms`. For calls (like Supabase's getUser) that don't accept an AbortSignal
+ * but must never hold up a page render indefinitely.
+ */
+export function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      },
+    );
+  });
+}

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { getManyQuoteSummariesWithTrend } from "@/lib/market/yahoo";
 import { MAJOR_INDICES, SECTORS } from "@/lib/market/symbols";
@@ -11,14 +12,10 @@ import AlertsOverview from "@/components/AlertsOverview";
 import CollapsibleNewsSection from "@/components/CollapsibleNewsSection";
 import { SentimentBadge } from "@/components/SentimentCard";
 
-export default async function HomePage() {
-  const [indices, sectors, marketSentiment, marketNews] = await Promise.all([
-    getManyQuoteSummariesWithTrend(MAJOR_INDICES),
-    getManyQuoteSummariesWithTrend(SECTORS),
-    getSentiment("SPY").catch(() => null),
-    getMarketNews().catch(() => []),
-  ]);
-
+// Each data section streams in behind its own Suspense boundary, so the page
+// (and the installed app, whose splash screen waits for the first paint)
+// shows up immediately even when a free data source is slow.
+export default function HomePage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 lg:px-8">
       <div className="grid gap-8 lg:grid-cols-3">
@@ -29,21 +26,23 @@ export default async function HomePage() {
                 Market — Previous Close
               </h2>
               <div className="w-40">
-                <SentimentBadge label="Sentiment" sentiment={marketSentiment} />
+                <Suspense fallback={null}>
+                  <MarketSentiment />
+                </Suspense>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {indices.map((quote) => (
-                <IndexCard key={quote.symbol} quote={quote} />
-              ))}
-            </div>
+            <Suspense fallback={<Skeleton className="h-24" />}>
+              <Indices />
+            </Suspense>
           </section>
 
           <section>
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
               Sectors
             </h2>
-            <SectorGrid sectors={sectors} />
+            <Suspense fallback={<Skeleton className="h-48" />}>
+              <Sectors />
+            </Suspense>
           </section>
 
           <section>
@@ -66,9 +65,45 @@ export default async function HomePage() {
           <AlertsOverview />
           <WatchlistCalendarSection />
 
-          <CollapsibleNewsSection items={marketNews} title="Market News" />
+          <Suspense fallback={<Skeleton className="h-32" />}>
+            <MarketNews />
+          </Suspense>
         </div>
       </div>
     </div>
+  );
+}
+
+async function MarketSentiment() {
+  const sentiment = await getSentiment("SPY").catch(() => null);
+  return <SentimentBadge label="Sentiment" sentiment={sentiment} />;
+}
+
+async function Indices() {
+  const indices = await getManyQuoteSummariesWithTrend(MAJOR_INDICES);
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {indices.map((quote) => (
+        <IndexCard key={quote.symbol} quote={quote} />
+      ))}
+    </div>
+  );
+}
+
+async function Sectors() {
+  const sectors = await getManyQuoteSummariesWithTrend(SECTORS);
+  return <SectorGrid sectors={sectors} />;
+}
+
+async function MarketNews() {
+  const news = await getMarketNews().catch(() => []);
+  return <CollapsibleNewsSection items={news} title="Market News" />;
+}
+
+function Skeleton({ className }: { className: string }) {
+  return (
+    <div
+      className={`animate-pulse rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-900/60 ${className}`}
+    />
   );
 }
