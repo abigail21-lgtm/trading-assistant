@@ -1,6 +1,7 @@
 import { getChart, type Candle } from "../market/yahoo";
 import { daysUntil, getUpcomingEarningsForSymbols, type EarningsEvent } from "../market/calendar";
 import { getCallChain, getOptionsOverview } from "../market/options";
+import { withTimeout } from "../market/http";
 import { evaluateDip, findDipTrades, paramsFor, summarizeTrades, type DipEvaluation, type DipTrackRecord } from "./dip";
 import { chooseExpirations, gradeCalls, type CallsForExpiry } from "./calls";
 import { gradeDip, type DipGradeResult, type EarningsInfo } from "./dip-grade";
@@ -90,13 +91,33 @@ function snapshotFrom(
   };
 }
 
+// Earnings dates only change the grade of an active dip (a no-dip symbol has
+// nothing to grade), and the calendar behind them is ~30 upstream requests.
+// So they're fetched only for symbols that need them, and never for longer
+// than this. Keeps the Signals tab and stock page card well inside the
+// hosting platform's time limit for a single request.
+const EARNINGS_BUDGET_MS = 4000;
+/** Per-symbol cap on fetching price history; a slow symbol shows as "couldn't load" rather than stalling the list. */
+const CHART_BUDGET_MS = 7000;
+
+const needsEarnings = (s: DipSnapshot) => s.evaluation.status !== "none";
+
+async function earningsFor(symbols: string[]): Promise<Map<string, EarningsEvent>> {
+  if (symbols.length === 0) return new Map();
+  return withTimeout(
+    getUpcomingEarningsForSymbols(symbols).catch(() => new Map<string, EarningsEvent>()),
+    EARNINGS_BUDGET_MS,
+    new Map<string, EarningsEvent>(),
+  );
+}
+
 /** One symbol, with its 10-year track record. For the stock page card. */
 export async function getDipSnapshot(symbol: string, rules: TradingRules = DEFAULT_RULES): Promise<DipSnapshot> {
-  const [chart, earningsMap] = await Promise.all([
-    getChart(symbol, "10y", "1d"),
-    getUpcomingEarningsForSymbols([symbol]).catch(() => new Map<string, EarningsEvent>()),
-  ]);
-  return snapshotFrom(symbol, chart.meta, chart.candles, earningsFromCalendar(earningsMap.get(symbol)), true, rules);
+  const chart = await getChart(symbol, "10y", "1d");
+  const first = snapshotFrom(symbol, chart.meta, chart.candles, null, true, rules);
+  if (!needsEarnings(first)) return first;
+  const earnings = await earningsFor([symbol]);
+  return snapshotFrom(symbol, chart.meta, chart.candles, earningsFromCalendar(earnings.get(symbol)), true, rules);
 }
 
 /** Many symbols, no track record (2 years of data is enough for the rules). For the Signals tab. */
@@ -104,20 +125,25 @@ export async function getDipSnapshots(
   symbols: string[],
   rules: TradingRules = DEFAULT_RULES,
 ): Promise<{ symbol: string; snapshot: DipSnapshot | null }[]> {
-  const earningsMap = await getUpcomingEarningsForSymbols(symbols).catch(() => new Map<string, EarningsEvent>());
-  return Promise.all(
-    symbols.map(async (symbol) => {
-      try {
-        const chart = await getChart(symbol, "2y", "1d");
-        return {
-          symbol,
-          snapshot: snapshotFrom(symbol, chart.meta, chart.candles, earningsFromCalendar(earningsMap.get(symbol)), false, rules),
-        };
-      } catch {
-        return { symbol, snapshot: null };
-      }
-    }),
+  const charts = await Promise.all(
+    symbols.map(async (symbol) => ({
+      symbol,
+      chart: await withTimeout(getChart(symbol, "2y", "1d").catch(() => null), CHART_BUDGET_MS, null),
+    })),
   );
+  const first = charts.map(({ symbol, chart }) => ({
+    symbol,
+    chart,
+    snapshot: chart ? snapshotFrom(symbol, chart.meta, chart.candles, null, false, rules) : null,
+  }));
+  const earnings = await earningsFor(first.filter((x) => x.snapshot && needsEarnings(x.snapshot)).map((x) => x.symbol));
+  return first.map(({ symbol, chart, snapshot }) => ({
+    symbol,
+    snapshot:
+      chart && snapshot && earnings.has(symbol)
+        ? snapshotFrom(symbol, chart.meta, chart.candles, earningsFromCalendar(earnings.get(symbol)), false, rules)
+        : snapshot,
+  }));
 }
 
 export interface ExpiryOption {

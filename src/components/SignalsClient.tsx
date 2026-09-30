@@ -13,32 +13,62 @@ interface Data {
   scanWatchlist: boolean;
 }
 
+const REQUEST_TIMEOUT_MS = 25000;
+
 export default function SignalsClient() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState(false);
   const [watchlistEmpty, setWatchlistEmpty] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    // Never leave the placeholders up indefinitely: a request that hasn't
+    // answered in time is treated as failed, with a way to try again.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     (async () => {
       try {
         const symbols = await getWatchlist();
         if (!cancelled) setWatchlistEmpty(symbols.length === 0);
-        const res = await fetch(`/api/signals?symbols=${encodeURIComponent(symbols.join(","))}`);
+        const res = await fetch(`/api/signals?symbols=${encodeURIComponent(symbols.join(","))}`, {
+          signal: controller.signal,
+        });
         if (!res.ok) throw new Error(String(res.status));
         const json: Data = await res.json();
         if (!cancelled) setData(json);
       } catch {
         if (!cancelled) setError(true);
+      } finally {
+        clearTimeout(timer);
       }
     })();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
+      controller.abort();
     };
-  }, []);
+  }, [attempt]);
 
   if (error) {
-    return <p className="mt-6 text-sm text-slate-500">Couldn&apos;t load signals right now. Try again in a minute.</p>;
+    return (
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
+        <p className="text-slate-600 dark:text-slate-400">
+          Couldn&apos;t load signals. The price data took too long or didn&apos;t answer.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setError(false);
+            setData(null);
+            setAttempt((n) => n + 1);
+          }}
+          className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+        >
+          Try again
+        </button>
+      </div>
+    );
   }
   if (!data) {
     return (

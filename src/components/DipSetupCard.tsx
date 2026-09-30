@@ -3,7 +3,11 @@ import type { DipSnapshot } from "@/lib/signals/load";
 import { money, sessionDate } from "@/lib/signals/format";
 import DipGradePill, { DipStagePill, isTradeUnderWay } from "./DipGradePill";
 
-/** Compact "Dip in an uptrend" summary for the stock page; opens the Setup screen. */
+/**
+ * Compact "Dip in an uptrend" summary for the stock page. Always opens the
+ * Setup screen: with no dip it explains the signal and shows the track
+ * record; calls are only suggested on a dip day.
+ */
 export default function DipSetupCard({ snapshot }: { snapshot: DipSnapshot }) {
   const { symbol, evaluation: e, grade, trackRecord: tr } = snapshot;
   const record =
@@ -34,8 +38,11 @@ export default function DipSetupCard({ snapshot }: { snapshot: DipSnapshot }) {
   );
 
   const shell = "block rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900";
-  // With nothing to act on, the card is informational only.
-  if (grade.grade == null) return <div className={shell}>{body}</div>;
+  const cta = isTradeUnderWay(e.status)
+    ? "See the plan"
+    : grade.grade == null
+      ? "How it works & past results"
+      : "See setup & calls";
 
   return (
     <Link
@@ -44,7 +51,7 @@ export default function DipSetupCard({ snapshot }: { snapshot: DipSnapshot }) {
     >
       {body}
       <span className="mt-2.5 flex items-center justify-between border-t border-slate-100 pt-2.5 text-sm font-medium text-emerald-600 dark:border-slate-800 dark:text-emerald-400">
-        {isTradeUnderWay(e.status) ? "See the plan" : "See setup & calls"} <span aria-hidden="true">→</span>
+        {cta} <span aria-hidden="true">→</span>
       </span>
     </Link>
   );

@@ -272,6 +272,17 @@ function Plan({ setup }: { setup: DipSetup }) {
       </h2>
       <ol className="mt-2 space-y-2.5 text-sm">{steps}</ol>
       {e.status !== "none" && e.status !== "sell-today" && noStop}
+      {e.status === "none" && (
+        <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-950/60 dark:text-slate-400">
+          <b className="font-semibold text-slate-800 dark:text-slate-200">When {symbol} dips,</b> this screen shows the
+          suggested call, graded strikes and the exact buy and sell prices. To get told when it happens, star {symbol} and
+          keep buy-zone alerts on in{" "}
+          <Link href="/settings" className="underline underline-offset-2">
+            My rules
+          </Link>
+          .
+        </p>
+      )}
     </>
   );
 }
