@@ -41,7 +41,7 @@ export function proxy(request: NextRequest) {
   // RLS); this presence check stops everyone else from using the app's
   // Yahoo/Nasdaq/options fetching as a free public relay, which could get
   // the deployment rate-limited or blocked by those sources.
-  if (!loggedIn && isApiRoute) {
+  if (!loggedIn && isApiRoute && pathname !== "/api/health") {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
 
