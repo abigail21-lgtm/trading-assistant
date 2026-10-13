@@ -30,6 +30,7 @@ import { getInsiderActivity } from "@/lib/market/insider";
 import AlertsPanel from "@/components/AlertsPanel";
 import DeepDiveCard from "@/components/DeepDiveCard";
 import DipSetupCard from "@/components/DipSetupCard";
+import RememberStock from "@/components/RememberStock";
 import { getDipSnapshot } from "@/lib/signals/load";
 import { getServerRules } from "@/lib/signals/rules-server";
 
@@ -80,19 +81,26 @@ export default async function StockPage({
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 lg:px-8">
-      <div className="flex items-start justify-between gap-3">
+      <RememberStock symbol={quote.symbol} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{quote.symbol}</h1>
           <p className="truncate text-sm text-slate-500">
             {quote.longName} · {quote.exchangeName}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href={`/compare?symbols=${symbol},SPY`}
             className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-800 dark:border-slate-800 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:text-slate-200"
           >
             Compare
+          </Link>
+          <Link
+            href={`/stock/${symbol}/setup`}
+            className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 transition hover:border-emerald-400 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-400 dark:hover:border-emerald-800"
+          >
+            Signals
           </Link>
           <a
             href={`https://finance.yahoo.com/quote/${symbol}/options/`}

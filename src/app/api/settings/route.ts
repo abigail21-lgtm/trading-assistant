@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getSignedInUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { parseRules, RULES_COOKIE, serializeRules } from "@/lib/signals/rules";
 import { getServerRules } from "@/lib/signals/rules-server";
@@ -26,9 +26,7 @@ export async function PUT(request: Request) {
   let savedToAccount = false;
   if (isSupabaseConfigured) {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getSignedInUser(supabase);
     if (user) {
       const { error } = await supabase
         .from("user_settings")

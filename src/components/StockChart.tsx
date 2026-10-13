@@ -275,7 +275,14 @@ export default function StockChart({
       resizeObserver.disconnect();
       candleSeriesRef.current = null;
       setChart(null);
-      newChart.remove();
+      // The library may already have a repaint queued for the next frame;
+      // removing the chart synchronously makes that repaint throw "Object is
+      // disposed" (seen when switching tabs). Removing it a frame later lets
+      // any queued repaint finish first.
+      // Hidden right away so a replacement chart (e.g. on a timeframe switch)
+      // never shows next to it for that frame.
+      newChart.chartElement().style.display = "none";
+      requestAnimationFrame(() => newChart.remove());
     };
   }, [candles, intraday, theme, symbol, timeframeKey, bfcacheRebuildKey]);
 
@@ -513,7 +520,13 @@ export default function StockChart({
     }
 
     chart.subscribeClick(handleClick);
-    return () => chart.unsubscribeClick(handleClick);
+    return () => {
+      try {
+        chart.unsubscribeClick(handleClick);
+      } catch {
+        // Chart already disposed by a sibling effect's cleanup this commit.
+      }
+    };
   }, [chart, symbol, timeframeKey]);
 
   if (candles.length === 0) {

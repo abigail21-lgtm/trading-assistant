@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getSignedInUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 // Per-user data -- see src/app/api/watchlist/route.ts for why this is explicit.
@@ -21,9 +21,7 @@ export async function POST(request: Request) {
   if (!isSupabaseConfigured) return NOT_CONFIGURED;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSignedInUser(supabase);
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const body = (await request.json().catch(() => null)) as
@@ -52,9 +50,7 @@ export async function DELETE(request: Request) {
   if (!isSupabaseConfigured) return NOT_CONFIGURED;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSignedInUser(supabase);
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);

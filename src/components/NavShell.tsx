@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { getRecentStocks } from "@/lib/recent-stocks";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import ThemeToggle from "./ThemeToggle";
 import AlertsWatcher from "./AlertsWatcher";
@@ -25,6 +26,19 @@ export default function NavShell({
 }) {
   const pathname = usePathname();
 
+  // The Search tab returns to the stock you were last on, like a tab that
+  // remembers its place; tapping it again while on a stock opens search.
+  const [lastStock, setLastStock] = useState<string | null>(null);
+  useEffect(() => {
+    const read = () => setLastStock(getRecentStocks()[0] ?? null);
+    read();
+    window.addEventListener("recent-stocks", read);
+    return () => window.removeEventListener("recent-stocks", read);
+  }, []);
+  const onStockPage = /^\/stock\/[^/]+/.test(pathname);
+  const hrefFor = (tab: (typeof TABS)[number]) =>
+    tab.href === "/stock" && lastStock && !onStockPage ? `/stock/${encodeURIComponent(lastStock)}` : tab.href;
+
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
@@ -41,7 +55,7 @@ export default function NavShell({
           {TABS.map((tab) => (
             <Link
               key={tab.href}
-              href={tab.href}
+              href={hrefFor(tab)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 isActive(tab.href)
                   ? "bg-emerald-600/10 text-emerald-600 dark:bg-emerald-600/20 dark:text-emerald-400"
@@ -88,7 +102,7 @@ export default function NavShell({
           return (
             <Link
               key={tab.href}
-              href={tab.href}
+              href={hrefFor(tab)}
               className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-medium ${
                 active ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500"
               }`}

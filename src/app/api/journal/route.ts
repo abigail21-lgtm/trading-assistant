@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getSignedInUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import type { RhTransaction } from "@/lib/journal/robinhood";
 
@@ -35,9 +35,7 @@ function clean(raw: unknown): RhTransaction[] | null {
 export async function GET() {
   if (!isSupabaseConfigured) return NOT_CONFIGURED;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSignedInUser(supabase);
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const { data, error } = await supabase.from("user_settings").select("journal").eq("user_id", user.id).maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -47,9 +45,7 @@ export async function GET() {
 export async function PUT(request: Request) {
   if (!isSupabaseConfigured) return NOT_CONFIGURED;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSignedInUser(supabase);
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const body = await request.json().catch(() => null);
   const transactions = clean(body?.transactions);

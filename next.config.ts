@@ -16,6 +16,13 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    // Keep a page you've just visited for 2 minutes when switching tabs, so
+    // going back to a stock doesn't reload it from scratch. (Default is 0:
+    // every visit refetched.) Prices on a revisited page can be up to 2
+    // minutes old; pull to refresh or reopen it for the latest.
+    staleTimes: { dynamic: 120 },
+  },
   async headers() {
     return [
       { source: "/:path*", headers: SECURITY_HEADERS },
